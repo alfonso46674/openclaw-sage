@@ -15,7 +15,7 @@ An [OpenClaw](https://openclaw.ai) skill that makes Claude an expert on [openCla
 |---|---|---|
 | `OPENCLAW_SAGE_SITEMAP_TTL` | `3600` | Sitemap cache TTL in seconds (1hr) |
 | `OPENCLAW_SAGE_DOC_TTL` | `86400` | Doc page cache TTL in seconds (24hr) |
-| `OPENCLAW_SAGE_CACHE_DIR` | `~/.cache/openclaw-sage` | Cache directory |
+| `OPENCLAW_SAGE_CACHE_DIR` | `<skill_root>/.cache/openclaw-sage` | Cache directory |
 
 Example:
 ```bash
@@ -67,7 +67,7 @@ Track what changes in the docs over time:
 
 ## Cache
 
-Cached files are stored in `~/.cache/openclaw-sage/`:
+Cached files are stored in `.cache/openclaw-sage/` inside the skill root by default (overridable via `OPENCLAW_SAGE_CACHE_DIR`):
 
 | File | Description |
 |---|---|

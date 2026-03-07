@@ -281,7 +281,7 @@ You are an expert on OpenClaw documentation. Your job is to accurately answer us
 Default TTLs (overridable via env vars):
 - Sitemap: `OPENCLAW_SAGE_SITEMAP_TTL` (default 3600s / 1hr)
 - Doc pages: `OPENCLAW_SAGE_DOC_TTL` (default 86400s / 24hr)
-- Cache dir: `OPENCLAW_SAGE_CACHE_DIR` (default `~/.cache/openclaw-sage`)
+- Cache dir: `OPENCLAW_SAGE_CACHE_DIR` (default `<skill_root>/.cache/openclaw-sage`)
 
 Example override:
 ```bash
