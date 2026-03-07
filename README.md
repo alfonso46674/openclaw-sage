@@ -16,6 +16,7 @@ An [OpenClaw](https://openclaw.ai) skill that makes Claude an expert on [openCla
 | `OPENCLAW_SAGE_SITEMAP_TTL` | `3600` | Sitemap cache TTL in seconds (1hr) |
 | `OPENCLAW_SAGE_DOC_TTL` | `86400` | Doc page cache TTL in seconds (24hr) |
 | `OPENCLAW_SAGE_CACHE_DIR` | `<skill_root>/.cache/openclaw-sage` | Cache directory |
+| `OPENCLAW_SAGE_LANGS` | `en` | Languages to fetch — comma-separated codes (`en,zh`) or `all` |
 
 Example:
 ```bash

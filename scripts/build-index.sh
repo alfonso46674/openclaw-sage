@@ -16,7 +16,42 @@ case "$1" in
       curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
     fi
 
-    URLS=$(grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" 2>/dev/null | grep "docs\.openclaw\.ai/" | grep -v '^https://docs\.openclaw\.ai/$')
+    ALL_URLS=$(grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" 2>/dev/null | grep "docs\.openclaw\.ai/" | grep -v '^https://docs\.openclaw\.ai/$')
+
+    # Show available languages in the sitemap
+    # Language prefix format: "ll/" or "ll-RR/" (e.g. zh-CN/, pt-BR/)
+    available_langs=$(echo "$ALL_URLS" | awk '
+      {
+        path = $0
+        sub(/https:\/\/docs\.openclaw\.ai\//, "", path)
+        if (match(path, /^[a-z][a-z](-[A-Za-z]+)?\//))
+          lang = substr(path, 1, RLENGTH - 1)
+        else
+          lang = "en"
+        langs[lang]++
+      }
+      END { for (l in langs) printf "%s (%d docs)  ", l, langs[l]; print "" }
+    ')
+    echo "Languages in sitemap: $available_langs" >&2
+    echo "Fetching language(s): $LANGS  (override with OPENCLAW_SAGE_LANGS=en,zh or =all)" >&2
+
+    # Filter URLs by language.
+    # LANGS is matched against the base 2-letter code so "zh" catches "zh-CN", "zh-TW", etc.
+    if [ "$LANGS" = "all" ]; then
+      URLS="$ALL_URLS"
+    else
+      URLS=$(echo "$ALL_URLS" | awk -v langs=",$LANGS," '
+        {
+          url = $0
+          sub(/https:\/\/docs\.openclaw\.ai\//, "", url)
+          if (match(url, /^[a-z][a-z](-[A-Za-z]+)?\//))
+            lang = substr(url, 1, 2)   # base code only: "zh-CN" → "zh"
+          else
+            lang = "en"
+          if (index(langs, "," lang ",") > 0) print $0
+        }
+      ')
+    fi
 
     if [ -z "$URLS" ]; then
       echo "Error: Could not get URL list from sitemap. Run ./scripts/sitemap.sh first."
