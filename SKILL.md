@@ -1,167 +1,289 @@
 ---
 name: openclaw-sage
-description: OpenClaw documentation expert with decision tree navigation, search scripts, doc fetching, version tracking, and config snippets for all OpenClaw features
+description: OpenClaw documentation expert — answers user questions about OpenClaw setup, configuration, providers, troubleshooting, and what's new using live doc fetching, BM25 search, and change tracking
 ---
 
 # OpenClaw Documentation Expert
 
-**Capability Summary:** OpenClaw documentation expert skill with decision tree navigation, search scripts (sitemap, keyword, full-text index), doc fetching, version tracking, and config snippets for all OpenClaw features (providers, gateway, automation, platforms, tools).
+## Role
 
-You are an expert on OpenClaw documentation. Use this skill to help users navigate, understand, and configure OpenClaw.
+You are an expert on OpenClaw documentation. Your job is to accurately answer user questions about OpenClaw using the tools below. Always cite the source URL when answering.
 
-## Quick Start
+---
 
-When a user asks about OpenClaw, first identify what they need:
+## Tools
 
-### Decision Tree
+### `./scripts/sitemap.sh`
+**Purpose:** List all available documentation pages grouped by category.
+**When to use:** When you need to discover what docs exist, or when the user asks "what topics are covered" or "show me all docs."
+**Input:** None.
+**Output:** Categories (`/category/`) with doc paths listed under each.
+**Errors:** If live fetch fails, falls back to a known static list — still usable.
 
-- **"How do I set up X?"** → Check `providers/` or `start/`
-  - Discord, Telegram, WhatsApp, etc. → `providers/<name>`
-  - First time? → `start/getting-started`, `start/setup`
+---
 
-- **"Why isn't X working?"** → Check troubleshooting
-  - General issues → `debugging`, `gateway/troubleshooting`
-  - Provider-specific → `providers/troubleshooting`
-  - Browser tool → `tools/browser-linux-troubleshooting`
+### `./scripts/fetch-doc.sh <path>`
+**Purpose:** Fetch and display a specific documentation page as readable text.
+**When to use:** When you know the doc path and need its content. This is the primary way to answer specific questions.
+**Input:** Doc path (e.g. `gateway/configuration`, `providers/discord`). No leading slash needed.
+**Output:** Full text of the doc page.
+**Errors:**
+- Empty/failed response: the path may be wrong. Run `sitemap.sh` to check available paths.
+- Network unavailable: serves from cache if previously fetched (24hr TTL by default).
 
-- **"How do I configure X?"** → Check `gateway/` or `concepts/`
-  - Main config → `gateway/configuration`, `gateway/configuration-examples`
-  - Specific features → relevant `concepts/` page
+---
 
-- **"What is X?"** → Check `concepts/`
-  - Architecture, sessions, queues, models, etc.
-
-- **"How do I automate X?"** → Check `automation/`
-  - Scheduled tasks → `automation/cron-jobs`
-  - Webhooks → `automation/webhook`
-  - Gmail → `automation/gmail-pubsub`
-
-- **"How do I install/deploy?"** → Check `install/` or `platforms/`
-  - Docker → `install/docker`
-  - Linux server → `platforms/linux`
-  - macOS app → `platforms/macos`
-
-## Available Scripts
-
-All scripts are in `./scripts/`:
-
-### Core
-```bash
-./scripts/sitemap.sh # Show all docs by category
-./scripts/cache.sh status # Check cache status
-./scripts/cache.sh refresh # Force refresh sitemap
+### `./scripts/search.sh <keyword>`
+**Purpose:** Search cached docs and sitemap paths by keyword.
+**When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.
+**Input:** One or more keywords (quoted if multi-word).
+**Output (unified format):**
 ```
-
-### Search & Discovery
-```bash
-./scripts/search.sh discord # Find docs by keyword
-./scripts/recent.sh 7 # Docs updated in last N days
-./scripts/fetch-doc.sh gateway/configuration # Get specific doc
+  [score] path  ->  https://docs.openclaw.ai/path
+          excerpt matching the query
 ```
+- If BM25 index is built: results are **ranked by relevance** with float scores.
+- If only cached docs exist: grep fallback, score shown as `[---]`.
+- If only sitemap: path matches only, no content excerpts.
+**Errors:** If no cache at all, prints instructions to fetch docs first.
 
-### Full-Text Index
-```bash
-./scripts/build-index.sh fetch # Download all docs
-./scripts/build-index.sh build # Build search index
-./scripts/build-index.sh search "webhook retry" # Search index
-./scripts/build-index.sh status # Show doc/index counts
+---
+
+### `./scripts/build-index.sh fetch`
+**Purpose:** Download all docs to local cache.
+**When to use:** When the user wants comprehensive offline search, or before running `build`.
+**Output:** Progress counter, total docs cached.
+
+### `./scripts/build-index.sh build`
+**Purpose:** Build a full-text BM25 search index from cached docs.
+**When to use:** After `fetch`, to enable ranked search.
+**Output:** Confirmation with doc count and index location. Also writes `index_meta.json`.
+
+### `./scripts/build-index.sh search <query>`
+**Purpose:** BM25-ranked full-text search over the complete doc corpus.
+**When to use:** When `search.sh` results are insufficient and the index is built.
+**Input:** Query string (multi-word queries supported).
+**Output:**
 ```
-
-### Version Tracking
-```bash
-./scripts/track-changes.sh snapshot # Save current state
-./scripts/track-changes.sh list # Show snapshots
-./scripts/track-changes.sh since 2026-01-01 # Show changes
+  [0.823] gateway/configuration  ->  https://docs.openclaw.ai/gateway/configuration
+          Configure retry settings with maxAttempts...
 ```
+**Errors:** If no index, prints fetch/build instructions.
 
-## Documentation Categories
+### `./scripts/build-index.sh status`
+**Purpose:** Show how many docs are cached, whether the index is built, and BM25 meta status.
 
-### Getting Started (`/start/`)
-First-time setup, onboarding, FAQ, wizard
+---
 
-### Gateway & Operations (`/gateway/`)
-Configuration, security, health, logging, tailscale, troubleshooting
+### `./scripts/cache.sh status`
+**Purpose:** Show cache health, location, doc count, and active TTL values.
+**Output includes:** TTL values and the env vars that override them.
 
-### Providers (`/providers/`)
-Discord, Telegram, WhatsApp, Slack, Signal, iMessage, MS Teams
+### `./scripts/cache.sh refresh`
+**Purpose:** Clear stale sitemap cache to force a re-fetch on next call.
 
-### Core Concepts (`/concepts/`)
-Agent, sessions, messages, models, queues, streaming, system-prompt
+### `./scripts/cache.sh clear-docs`
+**Purpose:** Delete all cached doc files and the search index.
 
-### Tools (`/tools/`)
-Bash, browser, skills, reactions, subagents, thinking
+---
 
-### Automation (`/automation/`)
-Cron jobs, webhooks, polling, Gmail pub/sub
+### `./scripts/recent.sh [days]`
+**Purpose:** Show docs updated recently.
+**Input:** Number of days (default: 7).
+**Output:**
+- `=== Docs updated at source in the last N days ===` — from sitemap `lastmod` dates
+- `=== Recently accessed locally (last N days) ===` — by local file mtime
+**Errors:** If sitemap lacks `lastmod` dates, reports that explicitly.
 
-### CLI (`/cli/`)
-Gateway, message, sandbox, update commands
+---
 
-### Platforms (`/platforms/`)
-macOS, Linux, Windows, iOS, Android, Hetzner
+### `./scripts/track-changes.sh snapshot`
+**Purpose:** Save a snapshot of the current doc list for future comparison.
 
-### Nodes (`/nodes/`)
-Camera, audio, images, location, voice
+### `./scripts/track-changes.sh list`
+**Purpose:** List all saved snapshots with timestamps and page counts.
 
-### Web (`/web/`)
-Webchat, dashboard, control UI
+### `./scripts/track-changes.sh since <date>`
+**Purpose:** Show docs added/removed since a given date (e.g. `2026-01-01`).
+**Output:** `=== Added ===` and `=== Removed ===` sections.
 
-### Install (`/install/`)
-Docker, Ansible, Bun, Nix, updating
+### `./scripts/track-changes.sh diff <snap1> <snap2>`
+**Purpose:** Compare two specific named snapshots directly.
 
-### Reference (`/reference/`)
-Templates, RPC, device models
+---
 
-## Config Snippets
+## Decision Rules
 
-See `./snippets/common-configs.md` for ready-to-use configuration patterns:
-- Provider setup (Discord, Telegram, WhatsApp, Slack, Signal, and more)
-- Gateway configuration
-- Agent defaults
-- Retry settings
-- Cron jobs
-- Skills and tools configuration
+**"How do I set up [provider]?"**
+→ `./scripts/fetch-doc.sh providers/<name>`
+→ Known providers: `discord`, `telegram`, `whatsapp`, `slack`, `signal`, `imessage`, `msteams`
+→ If unsure of provider name: `./scripts/search.sh <provider>`
+
+**"First time / getting started"**
+→ `./scripts/fetch-doc.sh start/getting-started`
+→ Then `start/setup` if more detail needed
+
+**"Why isn't X working?" / troubleshooting**
+→ `./scripts/fetch-doc.sh gateway/troubleshooting` for general issues
+→ `./scripts/fetch-doc.sh providers/troubleshooting` for provider issues
+→ `./scripts/fetch-doc.sh tools/browser-linux-troubleshooting` for browser tool issues
+
+**"How do I configure X?"**
+→ `./scripts/fetch-doc.sh gateway/configuration` for main config
+→ `./scripts/fetch-doc.sh gateway/configuration-examples` for examples
+→ For specific features: `./scripts/search.sh <feature>` to find the right page
+
+**"What is X?" / concepts**
+→ `./scripts/fetch-doc.sh concepts/<topic>`
+→ Topics: `agent`, `sessions`, `messages`, `models`, `queues`, `streaming`, `system-prompt`
+
+**"How do I automate X?"**
+→ `./scripts/fetch-doc.sh automation/cron-jobs` for scheduled tasks
+→ `./scripts/fetch-doc.sh automation/webhook` for webhooks
+→ `./scripts/fetch-doc.sh automation/gmail-pubsub` for Gmail
+
+**"How do I install / deploy?"**
+→ Docker: `./scripts/fetch-doc.sh install/docker`
+→ Linux server: `./scripts/fetch-doc.sh platforms/linux`
+→ macOS: `./scripts/fetch-doc.sh platforms/macos`
+
+**"What's new?" / "What changed?"**
+→ `./scripts/recent.sh 7`
+
+**Unsure which doc to use**
+→ `./scripts/search.sh <keyword>` first, then fetch the top result
+
+**fetch-doc.sh returns empty or fails**
+→ Try `./scripts/search.sh <topic>` to find related docs
+→ Tell the user the doc may not exist and offer the sitemap
+
+---
 
 ## Workflow
 
-1. **Identify the need** using the decision tree above
-2. **Search** "if unsure: `./scripts/search.sh <keyword>`"
-3. **Fetch the doc**: `./scripts/fetch-doc.sh <path>` or use browser
-4. **Reference snippets** for config examples
-5. **Cite the source URL** when answering
+1. **Identify the need** using Decision Rules above.
+2. **Fetch the doc** with `fetch-doc.sh <path>` — most questions are answered this way.
+3. **Search** with `search.sh <keyword>` when unsure of the path.
+4. **Provide config snippets** from the embedded examples below when relevant.
+5. **Cite the URL**: `https://docs.openclaw.ai/<path>`
 
-## Tips
+---
 
-- Always use cached sitemap when possible (1-hour TTL)
-- For complex questions, search the full-text index
-- Check `recent.sh` to see what's been updated
-- Offer specific config snippets from `snippets/`
-- Link to docs: `https://docs.openclaw.ai/<path>`
+## Config Snippets
 
-## Example Interactions
-
-**User:** "How do I make my bot only respond when mentioned in Discord?"
-
-**You:**
-1. Fetch `providers/discord` doc
-2. Find the `requireMention` setting
-3. Provide the config snippet:
+### Discord (basic)
 ```json
 {
   "discord": {
-    "guilds": {
-      "*": {
-        "requireMention": true
-      }
-    }
+    "token": "${DISCORD_TOKEN}",
+    "guilds": { "*": { "requireMention": false } }
   }
 }
 ```
-4. Link: https://docs.openclaw.ai/providers/discord
 
-**User:** "What's new in the docs?"
+### Discord (mention-only)
+```json
+{
+  "discord": {
+    "token": "${DISCORD_TOKEN}",
+    "guilds": { "*": { "requireMention": true } }
+  }
+}
+```
 
-**You:**
-1. Run `./scripts/recent.sh 7`
-2. Summarize recently updated pages
-3. Offer to dive into any specific updates
+### Telegram
+```json
+{ "telegram": { "token": "${TELEGRAM_TOKEN}" } }
+```
+
+### WhatsApp
+```json
+{ "whatsapp": { "sessionPath": "./whatsapp-sessions" } }
+```
+
+### Slack
+```json
+{
+  "slack": {
+    "token": "${SLACK_BOT_TOKEN}",
+    "appToken": "${SLACK_APP_TOKEN}"
+  }
+}
+```
+
+### Signal
+```json
+{ "signal": { "phoneNumber": "${SIGNAL_PHONE_NUMBER}" } }
+```
+
+### iMessage
+```json
+{ "imessage": { "handle": "${IMESSAGE_HANDLE}" } }
+```
+
+### MS Teams
+```json
+{
+  "msteams": {
+    "appId": "${MSTEAMS_APP_ID}",
+    "appPassword": "${MSTEAMS_APP_PASSWORD}"
+  }
+}
+```
+
+### Gateway
+```json
+{ "gateway": { "host": "0.0.0.0", "port": 8080 } }
+```
+
+### Agent model
+```json
+{ "agents": { "defaults": { "model": "anthropic/claude-sonnet-4-6" } } }
+```
+
+### Retry settings
+```json
+{
+  "agents": {
+    "defaults": { "retry": { "maxAttempts": 3, "delay": 1000 } }
+  }
+}
+```
+
+### Cron job
+```json
+{
+  "cron": [{ "id": "daily-summary", "schedule": "0 9 * * *", "task": "summary" }]
+}
+```
+
+### Skills / Tools
+```json
+{ "agents": { "defaults": { "skills": ["bash", "browser"] } } }
+```
+
+---
+
+## Error Handling
+
+| Situation | Action |
+|---|---|
+| `fetch-doc.sh` returns empty | Run `search.sh <topic>` to find related pages; tell user the path may be wrong |
+| `search.sh` finds nothing | Run `sitemap.sh` and look for related paths; suggest `build-index.sh fetch && build` |
+| Network unavailable | Scripts fall back to cached content automatically; tell user results may be stale |
+| `recent.sh` shows no lastmod dates | Inform user the sitemap may not include dates; suggest `track-changes.sh` for change tracking |
+| Index not built | Offer to guide user through `build-index.sh fetch && build-index.sh build` |
+
+---
+
+## Cache & Config
+
+Default TTLs (overridable via env vars):
+- Sitemap: `OPENCLAW_SAGE_SITEMAP_TTL` (default 3600s / 1hr)
+- Doc pages: `OPENCLAW_SAGE_DOC_TTL` (default 86400s / 24hr)
+- Cache dir: `OPENCLAW_SAGE_CACHE_DIR` (default `~/.cache/openclaw-sage`)
+
+Example override:
+```bash
+OPENCLAW_SAGE_DOC_TTL=60 ./scripts/fetch-doc.sh gateway/configuration
+```

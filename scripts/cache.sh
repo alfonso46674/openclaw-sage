@@ -1,27 +1,14 @@
 #!/bin/bash
-# Cache management for Clawdbot docs
-CACHE_DIR="${HOME}/.cache/openclaw-sage"
+# Cache management for OpenClaw docs
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+
 SITEMAP_CACHE="${CACHE_DIR}/sitemap.txt"
-CACHE_TTL=3600  # 1 hour in seconds
-
-mkdir -p "$CACHE_DIR"
-
-is_cache_fresh() {
-  [ -f "$1" ] || return 1
-  local now mtime
-  now=$(date +%s)
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    mtime=$(stat -f %m "$1")
-  else
-    mtime=$(stat -c %Y "$1")
-  fi
-  [ $((now - mtime)) -lt $CACHE_TTL ]
-}
 
 case "$1" in
   status)
     if [ -f "$SITEMAP_CACHE" ]; then
-      if is_cache_fresh "$SITEMAP_CACHE"; then
+      if is_cache_fresh "$SITEMAP_CACHE" "$SITEMAP_TTL"; then
         local_mtime=""
         if [[ "$OSTYPE" == "darwin"* ]]; then
           local_mtime=$(stat -f %m "$SITEMAP_CACHE")
@@ -32,7 +19,6 @@ case "$1" in
         echo "Cache status: FRESH"
         echo "Location:     $CACHE_DIR"
         echo "Cached at:    ${cached_at}"
-        echo "TTL:          1 hour"
         doc_count=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
         echo "Cached docs:  $doc_count"
       else
@@ -43,6 +29,11 @@ case "$1" in
       echo "Cache status: EMPTY"
       echo "Run: ./scripts/sitemap.sh to populate"
     fi
+    echo ""
+    echo "TTL config (override with env vars):"
+    echo "  Sitemap: ${SITEMAP_TTL}s  (OPENCLAW_SAGE_SITEMAP_TTL)"
+    echo "  Docs:    ${DOC_TTL}s  (OPENCLAW_SAGE_DOC_TTL)"
+    echo "  Dir:     ${CACHE_DIR}  (OPENCLAW_SAGE_CACHE_DIR)"
     ;;
   refresh)
     echo "Forcing cache refresh..."
@@ -52,7 +43,7 @@ case "$1" in
     ;;
   clear-docs)
     count=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
-    rm -f "${CACHE_DIR}"/doc_*.txt "${CACHE_DIR}/index.txt"
+    rm -f "${CACHE_DIR}"/doc_*.txt "${CACHE_DIR}/index.txt" "${CACHE_DIR}/index_meta.json"
     echo "Cleared $count cached docs and index."
     ;;
   dir)

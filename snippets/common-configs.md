@@ -67,6 +67,25 @@
 }
 ```
 
+### iMessage
+```json
+{
+  "imessage": {
+    "handle": "${IMESSAGE_HANDLE}"
+  }
+}
+```
+
+### MS Teams
+```json
+{
+  "msteams": {
+    "appId": "${MSTEAMS_APP_ID}",
+    "appPassword": "${MSTEAMS_APP_PASSWORD}"
+  }
+}
+```
+
 ## Gateway Configuration
 ```json
 {

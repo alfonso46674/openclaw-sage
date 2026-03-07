@@ -1,19 +1,18 @@
 #!/bin/bash
 # Show recently updated docs by parsing sitemap lastmod dates
 DAYS=${1:-7}
-CACHE_DIR="${HOME}/.cache/openclaw-sage"
-SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
 
-mkdir -p "$CACHE_DIR"
+SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
 
 # Fetch sitemap XML if not cached
 if [ ! -f "$SITEMAP_XML" ]; then
   echo "Fetching sitemap..." >&2
-  curl -sf --max-time 10 "https://docs.openclaw.ai/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+  curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
 fi
 
-echo "Docs updated in the last $DAYS days:"
+echo "=== Docs updated at source in the last $DAYS days ==="
 echo ""
 
 if [ -f "$SITEMAP_XML" ]; then
@@ -59,7 +58,6 @@ PYEOF
 
   if [ $? -ne 0 ]; then
     echo "  Falling back to grep-based date search..." >&2
-    # Simple grep fallback: extract loc/lastmod pairs
     grep -A1 '<lastmod>' "$SITEMAP_XML" | grep -v '^--$' | \
       paste - - | \
       awk -v days="$DAYS" '
@@ -76,13 +74,14 @@ else
   echo "  Try running: ./scripts/sitemap.sh"
 fi
 
-# Also show recently accessed cached docs
 echo ""
-echo "Recently accessed cached docs (last $DAYS days):"
+echo "=== Recently accessed locally (last $DAYS days) ==="
+echo ""
+
 found=0
 while IFS= read -r f; do
   path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
-  echo "  📄 $path"
+  echo "  $path"
   found=1
 done < <(find "$CACHE_DIR" -name "doc_*.txt" -mtime "-${DAYS}" 2>/dev/null)
 

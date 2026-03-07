@@ -1,16 +1,18 @@
 #!/bin/bash
 # Track changes to documentation by diffing sitemap snapshots
-CACHE_DIR="${HOME}/.cache/openclaw-sage"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+
 SNAPSHOTS_DIR="${CACHE_DIR}/snapshots"
 
 mkdir -p "$SNAPSHOTS_DIR"
 
 get_current_pages() {
   local sitemap_xml="${CACHE_DIR}/sitemap.xml"
-  curl -sf --max-time 10 "https://docs.openclaw.ai/sitemap.xml" -o "$sitemap_xml" 2>/dev/null
+  curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$sitemap_xml" 2>/dev/null
   grep -oP '(?<=<loc>)[^<]+' "$sitemap_xml" 2>/dev/null \
     | grep "docs\.openclaw\.ai/" \
-    | sed 's|https://docs\.openclaw\.ai/||' \
+    | sed "s|${DOCS_BASE_URL}/||" \
     | grep -v '^$' \
     | sort
 }
@@ -75,6 +77,7 @@ case "$1" in
 
     # Use current live state as "after"
     AFTER_TMP=$(mktemp)
+    trap "rm -f $AFTER_TMP" EXIT
     echo "Fetching current doc list for comparison..." >&2
     get_current_pages > "$AFTER_TMP"
 
@@ -107,8 +110,6 @@ case "$1" in
     else
       echo "=== Removed === (none)"
     fi
-
-    rm -f "$AFTER_TMP"
     ;;
 
   diff)

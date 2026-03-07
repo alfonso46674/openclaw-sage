@@ -1,26 +1,10 @@
 #!/bin/bash
 # Full-text index management for offline search
-CACHE_DIR="${HOME}/.cache/openclaw-sage"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+
 INDEX_FILE="${CACHE_DIR}/index.txt"
 SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
-
-mkdir -p "$CACHE_DIR"
-
-fetch_text() {
-  local url="$1"
-  if command -v lynx &>/dev/null; then
-    lynx -dump -nolist "$url" 2>/dev/null
-  elif command -v w3m &>/dev/null; then
-    w3m -dump "$url" 2>/dev/null
-  else
-    curl -sf --max-time 15 "$url" 2>/dev/null \
-      | sed 's/<script[^>]*>.*<\/script>//gI' \
-      | sed 's/<style[^>]*>.*<\/style>//gI' \
-      | sed 's/<[^>]*>//g' \
-      | sed 's/&amp;/\&/g; s/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g; s/&#39;/'"'"'/g; s/&nbsp;/ /g' \
-      | sed '/^[[:space:]]*$/d'
-  fi
-}
 
 case "$1" in
   fetch)
@@ -29,7 +13,7 @@ case "$1" in
     # Ensure sitemap XML is available
     if [ ! -f "$SITEMAP_XML" ]; then
       echo "Fetching sitemap first..." >&2
-      curl -sf --max-time 10 "https://docs.openclaw.ai/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+      curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
     fi
 
     URLS=$(grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" 2>/dev/null | grep "docs\.openclaw\.ai/" | grep -v '^https://docs\.openclaw\.ai/$')
@@ -44,13 +28,13 @@ case "$1" in
     new=0
 
     while IFS= read -r url; do
-      path=$(echo "$url" | sed 's|https://docs\.clawd\.bot/||')
+      path=$(echo "$url" | sed 's|https://docs\.openclaw\.ai/||')
       [ -z "$path" ] && continue
       cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
       count=$((count + 1))
       printf "\r  [%d/%d] %s          " "$count" "$total" "$path" >&2
 
-      if [ ! -f "$cache_file" ]; then
+      if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
         fetch_text "$url" > "$cache_file"
         if [ ! -s "$cache_file" ]; then
           rm -f "$cache_file"
@@ -86,6 +70,12 @@ case "$1" in
 
     line_count=$(wc -l < "$INDEX_FILE")
     echo "Index built: $doc_count docs, $line_count lines."
+
+    if command -v python3 &>/dev/null; then
+      echo "Building BM25 meta..." >&2
+      python3 "$SCRIPT_DIR/bm25_search.py" build-meta "$INDEX_FILE"
+    fi
+
     echo "Location: $INDEX_FILE"
     echo "Search with: ./scripts/build-index.sh search <query>"
     ;;
@@ -108,26 +98,40 @@ case "$1" in
     echo "Search results for: $QUERY"
     echo ""
 
-    grep -i "$QUERY" "$INDEX_FILE" \
-      | awk -F'|' '
-          {
-            if ($1 != prev) {
-              if (prev != "") print ""
-              print "📄 " $1 "  →  https://docs.openclaw.ai/" $1
-              prev = $1
-              count = 0
+    if command -v python3 &>/dev/null; then
+      python3 "$SCRIPT_DIR/bm25_search.py" search "$INDEX_FILE" "$QUERY" \
+        | while IFS='|' read -r score path excerpt; do
+            score=$(echo "$score" | tr -d ' ')
+            path=$(echo "$path" | tr -d ' ')
+            excerpt=$(echo "$excerpt" | sed 's/^[[:space:]]*//')
+            echo "  [$score] $path  ->  ${DOCS_BASE_URL}/$path"
+            echo "          $excerpt"
+            echo ""
+          done
+    else
+      # grep fallback when python3 unavailable
+      grep -i "$QUERY" "$INDEX_FILE" \
+        | awk -F'|' '
+            {
+              if ($1 != prev) {
+                if (prev != "") print ""
+                print "  [---] " $1 "  ->  https://docs.openclaw.ai/" $1
+                prev = $1
+                count = 0
+              }
+              if (count < 4) {
+                gsub(/^[[:space:]]+/, "", $2)
+                print "        " $2
+                count++
+              }
             }
-            if (count < 4) {
-              gsub(/^[[:space:]]+/, "", $2)
-              print "   " $2
-              count++
-            }
-          }
-        ' \
-      | head -80
+          ' \
+        | head -80
+      echo ""
+      echo "Note: Install python3 for ranked BM25 results."
+    fi
 
     match_count=$(grep -ic "$QUERY" "$INDEX_FILE" 2>/dev/null || echo 0)
-    echo ""
     echo "($match_count matching lines across all docs)"
     ;;
 
@@ -137,6 +141,12 @@ case "$1" in
     if [ -f "$INDEX_FILE" ]; then
       line_count=$(wc -l < "$INDEX_FILE")
       echo "Index:       $line_count lines  ($INDEX_FILE)"
+      META_FILE="${CACHE_DIR}/index_meta.json"
+      if [ -f "$META_FILE" ]; then
+        echo "BM25 meta:   present"
+      else
+        echo "BM25 meta:   not built (run 'build' to generate)"
+      fi
     else
       echo "Index:       not built"
     fi

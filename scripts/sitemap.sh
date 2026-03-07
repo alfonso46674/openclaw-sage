@@ -1,36 +1,23 @@
 #!/bin/bash
 # Sitemap generator - fetches and displays all docs by category
-CACHE_DIR="${HOME}/.cache/openclaw-sage"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+source "$SCRIPT_DIR/lib.sh"
+
 SITEMAP_CACHE="${CACHE_DIR}/sitemap.txt"
 SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
-CACHE_TTL=3600
 
-mkdir -p "$CACHE_DIR"
-
-is_cache_fresh() {
-  [ -f "$1" ] || return 1
-  local now mtime
-  now=$(date +%s)
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    mtime=$(stat -f %m "$1")
-  else
-    mtime=$(stat -c %Y "$1")
-  fi
-  [ $((now - mtime)) -lt $CACHE_TTL ]
-}
-
-if is_cache_fresh "$SITEMAP_CACHE"; then
+if is_cache_fresh "$SITEMAP_CACHE" "$SITEMAP_TTL"; then
   cat "$SITEMAP_CACHE"
   exit 0
 fi
 
-echo "Fetching Clawdbot documentation sitemap..." >&2
+echo "Fetching OpenClaw documentation sitemap..." >&2
 
-if curl -sf --max-time 10 "https://docs.openclaw.ai/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
+if curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
   # Parse URLs from sitemap XML, group by top-level category
   grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" \
     | grep "docs\.openclaw\.ai/" \
-    | sed 's|https://docs\.openclaw\.ai/||' \
+    | sed "s|${DOCS_BASE_URL}/||" \
     | grep -v '^$' \
     | sort \
     | awk -F'/' '

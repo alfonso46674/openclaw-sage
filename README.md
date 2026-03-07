@@ -6,8 +6,21 @@ An [OpenClaw](https://openclaw.ai) skill that makes Claude an expert on [openCla
 
 - `bash`
 - `curl`
-- `python3` (for `recent.sh` date parsing)
+- `python3` *(optional, recommended — enables BM25 ranked search and `recent.sh` date parsing)*
 - `lynx` or `w3m` *(optional, recommended — improves HTML-to-text extraction)*
+
+## Environment Variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `OPENCLAW_SAGE_SITEMAP_TTL` | `3600` | Sitemap cache TTL in seconds (1hr) |
+| `OPENCLAW_SAGE_DOC_TTL` | `86400` | Doc page cache TTL in seconds (24hr) |
+| `OPENCLAW_SAGE_CACHE_DIR` | `~/.cache/openclaw-sage` | Cache directory |
+
+Example:
+```bash
+OPENCLAW_SAGE_DOC_TTL=60 ./scripts/fetch-doc.sh gateway/configuration
+```
 
 ## Scripts
 
@@ -62,6 +75,7 @@ Cached files are stored in `~/.cache/openclaw-sage/`:
 | `sitemap.txt` | Parsed sitemap (1hr TTL) |
 | `doc_<path>.txt` | Individually cached doc pages (1hr TTL) |
 | `index.txt` | Full-text search index |
+| `index_meta.json` | BM25 pre-computed doc lengths and term frequencies |
 | `snapshots/` | Timestamped doc-list snapshots for change tracking |
 
 ## Docs
