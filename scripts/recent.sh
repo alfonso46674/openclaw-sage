@@ -1,0 +1,91 @@
+#!/bin/bash
+# Show recently updated docs by parsing sitemap lastmod dates
+DAYS=${1:-7}
+CACHE_DIR="${HOME}/.cache/openclaw-sage"
+SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+mkdir -p "$CACHE_DIR"
+
+# Fetch sitemap XML if not cached
+if [ ! -f "$SITEMAP_XML" ]; then
+  echo "Fetching sitemap..." >&2
+  curl -sf --max-time 10 "https://docs.openclaw.ai/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+fi
+
+echo "Docs updated in the last $DAYS days:"
+echo ""
+
+if [ -f "$SITEMAP_XML" ]; then
+  # Parse lastmod dates using python3 (widely available)
+  python3 - "$SITEMAP_XML" "$DAYS" <<'PYEOF'
+import sys
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+
+sitemap_file = sys.argv[1]
+days = int(sys.argv[2])
+
+try:
+    tree = ET.parse(sitemap_file)
+    root = tree.getroot()
+    # Handle namespace
+    ns = {'sm': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    recent = []
+    for url in root.findall('.//sm:url', ns):
+        loc = url.find('sm:loc', ns)
+        lastmod = url.find('sm:lastmod', ns)
+        if loc is not None and lastmod is not None and lastmod.text:
+            try:
+                dt_str = lastmod.text.strip()[:10]
+                dt = datetime.fromisoformat(dt_str).replace(tzinfo=timezone.utc)
+                if dt >= cutoff:
+                    path = loc.text.replace('https://docs.openclaw.ai/', '')
+                    recent.append((dt, path))
+            except Exception:
+                pass
+    recent.sort(reverse=True)
+    if recent:
+        for dt, path in recent:
+            print(f"  {dt.strftime('%Y-%m-%d')}  {path}")
+    else:
+        print(f"  No docs with lastmod dates in the last {days} days found in sitemap.")
+        print("  (The sitemap may not include lastmod dates for all pages.)")
+except Exception as e:
+    print(f"  Could not parse sitemap: {e}")
+    sys.exit(1)
+PYEOF
+
+  if [ $? -ne 0 ]; then
+    echo "  Falling back to grep-based date search..." >&2
+    # Simple grep fallback: extract loc/lastmod pairs
+    grep -A1 '<lastmod>' "$SITEMAP_XML" | grep -v '^--$' | \
+      paste - - | \
+      awk -v days="$DAYS" '
+        {
+          gsub(/<[^>]*>/, "", $0)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", $0)
+          split($0, a, /[[:space:]]+/)
+          print a[1], a[2]
+        }
+      ' | head -20
+  fi
+else
+  echo "  Sitemap not available. Could not check recent changes."
+  echo "  Try running: ./scripts/sitemap.sh"
+fi
+
+# Also show recently accessed cached docs
+echo ""
+echo "Recently accessed cached docs (last $DAYS days):"
+found=0
+while IFS= read -r f; do
+  path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
+  echo "  📄 $path"
+  found=1
+done < <(find "$CACHE_DIR" -name "doc_*.txt" -mtime "-${DAYS}" 2>/dev/null)
+
+if [ "$found" -eq 0 ]; then
+  echo "  (none — fetch docs with ./scripts/fetch-doc.sh <path>)"
+fi

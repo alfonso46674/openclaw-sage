@@ -1,0 +1,12 @@
+{
+  "slug": "openclaw-sage",
+  "version": "0.1.0",
+  "name": "openclaw-sage",
+  "displayName": "OpenClaw Sage",
+  "description": "OpenClaw documentation expert with decision tree navigation, search scripts, doc fetching, version tracking, and config snippets for all OpenClaw features.",
+  "author": "Alfonso Ramirez",
+  "license": "MIT",
+  "tags": ["openclaw", "documentation", "docs", "help"],
+  "main": "SKILL.md",
+  "publishedAt": null
+}
