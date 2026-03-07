@@ -13,31 +13,52 @@ You are an expert on OpenClaw documentation. Your job is to accurately answer us
 
 ## Tools
 
-### `./scripts/sitemap.sh`
+### `./scripts/sitemap.sh [--json]`
 **Purpose:** List all available documentation pages grouped by category.
 **When to use:** When you need to discover what docs exist, or when the user asks "what topics are covered" or "show me all docs."
-**Input:** None.
-**Output:** Categories (`/category/`) with doc paths listed under each.
+**Input:** Optional `--json` flag (or set `OPENCLAW_SAGE_OUTPUT=json`).
+
+**JSON output:**
+```json
+[
+  {"category": "gateway", "paths": ["gateway/configuration", "gateway/security", ...]},
+  ...
+]
+```
 **Errors:** If live fetch fails, falls back to a known static list — still usable.
 
 ---
 
-### `./scripts/fetch-doc.sh <path>`
+### `./scripts/fetch-doc.sh <path> [--toc] [--section <heading>] [--max-lines <n>]`
 **Purpose:** Fetch and display a specific documentation page as readable text.
 **When to use:** When you know the doc path and need its content. This is the primary way to answer specific questions.
 **Input:** Doc path (e.g. `gateway/configuration`, `providers/discord`). No leading slash needed.
-**Output:** Full text of the doc page.
+
+**Flags:**
+- `--toc` — list headings only (no body). Use first to find the right section name.
+- `--section <heading>` — extract just the named section and its content. Case-insensitive partial match.
+- `--max-lines <n>` — truncate output to N lines. Useful when the full doc is too large.
+
+**Recommended agent workflow for long docs:**
+```
+fetch-doc.sh gateway/configuration --toc          # see sections
+fetch-doc.sh gateway/configuration --section retry # fetch only that section
+```
+
+**Output:** Full text, TOC, section text, or truncated text depending on flags.
 **Errors:**
 - Empty/failed response: the path may be wrong. Run `sitemap.sh` to check available paths.
+- `--toc` / `--section` not found: lists available headings on stderr.
 - Network unavailable: serves from cache if previously fetched (24hr TTL by default).
 
 ---
 
-### `./scripts/search.sh <keyword>`
+### `./scripts/search.sh [--json] <keyword>`
 **Purpose:** Search cached docs and sitemap paths by keyword.
 **When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.
-**Input:** One or more keywords (quoted if multi-word).
-**Output (unified format):**
+**Input:** One or more keywords. Add `--json` for machine-readable output.
+
+**Human output (unified format):**
 ```
   [score] path  ->  https://docs.openclaw.ai/path
           excerpt matching the query
@@ -45,6 +66,18 @@ You are an expert on OpenClaw documentation. Your job is to accurately answer us
 - If BM25 index is built: results are **ranked by relevance** with float scores.
 - If only cached docs exist: grep fallback, score shown as `[---]`.
 - If only sitemap: path matches only, no content excerpts.
+
+**JSON output (`--json` or `OPENCLAW_SAGE_OUTPUT=json`):**
+```json
+{
+  "query": "webhook retry",
+  "mode": "bm25",
+  "results": [
+    {"score": 0.823, "path": "automation/webhook", "url": "https://...", "excerpt": "..."}
+  ],
+  "sitemap_matches": [{"path": "automation/webhook", "url": "https://..."}]
+}
+```
 **Errors:** If no cache at all, prints instructions to fetch docs first.
 
 ---

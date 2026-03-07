@@ -1,23 +1,120 @@
 #!/bin/bash
-# Search docs by keyword - searches cached docs and sitemap paths
-if [ -z "$1" ]; then
-  echo "Usage: search.sh <keyword>"
-  exit 1
-fi
+# Search docs by keyword
+# Usage: search.sh [--json] <keyword...>
 
-KEYWORD="$*"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
+
+# Parse flags
+JSON=false
+[[ "${OPENCLAW_SAGE_OUTPUT}" == "json" ]] && JSON=true
+ARGS=()
+for arg in "$@"; do
+  case "$arg" in
+    --json) JSON=true ;;
+    *) ARGS+=("$arg") ;;
+  esac
+done
+KEYWORD="${ARGS[*]}"
+
+if [ -z "$KEYWORD" ]; then
+  echo "Usage: search.sh [--json] <keyword>"
+  exit 1
+fi
 
 SITEMAP_CACHE="${CACHE_DIR}/sitemap.txt"
 INDEX_FILE="${CACHE_DIR}/index.txt"
 
+# --- JSON output path ---
+if $JSON; then
+  if ! command -v python3 &>/dev/null; then
+    echo '{"error": "python3 required for --json output"}' >&2
+    exit 1
+  fi
+  python3 - "$INDEX_FILE" "$KEYWORD" "$DOCS_BASE_URL" \
+              "$SCRIPT_DIR/bm25_search.py" "$SITEMAP_CACHE" "$CACHE_DIR" <<'PYEOF'
+import sys, json, os, subprocess
+
+index_file    = sys.argv[1]
+keyword       = sys.argv[2]
+base_url      = sys.argv[3]
+bm25_script   = sys.argv[4]
+sitemap_cache = sys.argv[5]
+cache_dir     = sys.argv[6]
+
+results = []
+mode = None
+
+# 1. BM25 ranked search
+if os.path.exists(index_file):
+    proc = subprocess.run(['python3', bm25_script, 'search', index_file, keyword],
+                          capture_output=True, text=True)
+    for line in proc.stdout.strip().splitlines():
+        parts = line.split(' | ', 2)
+        if len(parts) == 3:
+            score_str, path, excerpt = parts
+            results.append({
+                'score': float(score_str.strip()),
+                'path': path.strip(),
+                'url': f'{base_url}/{path.strip()}',
+                'excerpt': excerpt.strip(),
+            })
+    mode = 'bm25'
+
+# 2. grep fallback on individually cached docs
+elif any(f.startswith('doc_') and f.endswith('.txt')
+         for f in os.listdir(cache_dir)):
+    kw = keyword.lower()
+    for fname in sorted(os.listdir(cache_dir)):
+        if not (fname.startswith('doc_') and fname.endswith('.txt')):
+            continue
+        fpath = os.path.join(cache_dir, fname)
+        path = fname[4:-4].replace('_', '/')
+        try:
+            with open(fpath, encoding='utf-8', errors='replace') as f:
+                for line in f:
+                    if kw in line.lower():
+                        results.append({
+                            'score': None,
+                            'path': path,
+                            'url': f'{base_url}/{path}',
+                            'excerpt': line.strip(),
+                        })
+                        break
+        except Exception:
+            pass
+    mode = 'grep'
+
+# 3. Sitemap path matches
+sitemap_matches = []
+if os.path.exists(sitemap_cache):
+    kw = keyword.lower()
+    with open(sitemap_cache) as f:
+        for line in f:
+            if kw in line.lower() and line.strip().startswith('-'):
+                path = line.strip().lstrip('- ').strip()
+                sitemap_matches.append({'path': path, 'url': f'{base_url}/{path}'})
+
+out = {
+    'query': keyword,
+    'mode': mode or 'sitemap-only',
+    'results': results,
+}
+if sitemap_matches:
+    out['sitemap_matches'] = sitemap_matches
+
+print(json.dumps(out, indent=2))
+PYEOF
+  exit 0
+fi
+
+# --- Human-readable output ---
 echo "Searching docs for: $KEYWORD"
 echo ""
 
 found=0
 
-# 1. Search full-text index with BM25 if available
+# 1. BM25 ranked search
 if [ -f "$INDEX_FILE" ] && command -v python3 &>/dev/null; then
   echo "=== Full-text index matches (BM25 ranked) ==="
   python3 "$SCRIPT_DIR/bm25_search.py" search "$INDEX_FILE" "$KEYWORD" \
@@ -32,7 +129,6 @@ if [ -f "$INDEX_FILE" ] && command -v python3 &>/dev/null; then
   echo ""
   found=1
 
-# 2. grep fallback when index exists but python3 unavailable
 elif [ -f "$INDEX_FILE" ]; then
   echo "=== Full-text index matches ==="
   echo "Note: Install python3 for ranked BM25 results."
@@ -43,21 +139,15 @@ elif [ -f "$INDEX_FILE" ]; then
           if ($1 != prev) {
             print ""
             print "  [---] " $1 "  ->  https://docs.openclaw.ai/" $1
-            prev = $1
-            count = 0
+            prev = $1; count = 0
           }
-          if (count < 3) {
-            gsub(/^[[:space:]]+/, "", $2)
-            print "        " $2
-            count++
-          }
+          if (count < 3) { gsub(/^[[:space:]]+/, "", $2); print "        " $2; count++ }
         }
       ' \
     | head -60
   echo ""
   found=1
 
-# 3. Search individually cached docs (no index built yet)
 elif ls "$CACHE_DIR"/doc_*.txt &>/dev/null 2>&1; then
   echo "=== Cached doc matches ==="
   echo "Note: Run './scripts/build-index.sh build' for ranked BM25 results."
@@ -71,7 +161,7 @@ elif ls "$CACHE_DIR"/doc_*.txt &>/dev/null 2>&1; then
   found=1
 fi
 
-# 4. Search sitemap paths (always shown when available)
+# Sitemap path matches
 if [ -f "$SITEMAP_CACHE" ]; then
   matches=$(grep -i "$KEYWORD" "$SITEMAP_CACHE" | grep '^\s*-')
   if [ -n "$matches" ]; then
@@ -81,7 +171,6 @@ if [ -f "$SITEMAP_CACHE" ]; then
   fi
 fi
 
-# 5. No content at all
 if [ "$found" -eq 0 ]; then
   echo "No cached content to search. Options:"
   echo "  1. Fetch a specific doc:  ./scripts/fetch-doc.sh <path>"

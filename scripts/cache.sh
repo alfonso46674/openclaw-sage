@@ -43,7 +43,7 @@ case "$1" in
     ;;
   clear-docs)
     count=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
-    rm -f "${CACHE_DIR}"/doc_*.txt "${CACHE_DIR}/index.txt" "${CACHE_DIR}/index_meta.json"
+    rm -f "${CACHE_DIR}"/doc_*.txt "${CACHE_DIR}"/doc_*.html "${CACHE_DIR}/index.txt" "${CACHE_DIR}/index_meta.json"
     echo "Cleared $count cached docs and index."
     ;;
   dir)
