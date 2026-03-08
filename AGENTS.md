@@ -43,7 +43,7 @@ Gives you access to OpenClaw documentation via shell scripts. Docs are fetched f
 
 ### Discovery → fetch
 ```bash
-./scripts/search.sh --json "webhook retry"   # 1. Find relevant docs
+./scripts/search.sh --json webhook retry     # 1. Find relevant docs (quotes optional)
 ./scripts/fetch-doc.sh automation/webhook    # 2. Fetch the top result
 ```
 
@@ -71,14 +71,14 @@ Gives you access to OpenClaw documentation via shell scripts. Docs are fetched f
 ./scripts/fetch-doc.sh <path> --section <h>  # one section (partial, case-insensitive)
 ./scripts/fetch-doc.sh <path> --max-lines 80 # truncated
 
-# Search
-./scripts/search.sh <keyword>                # BM25 ranked if index built, grep fallback
-./scripts/search.sh --json <keyword>         # {query, mode, results[], sitemap_matches[]}
+# Search — multi-word queries work without quotes
+./scripts/search.sh webhook retry            # same as search.sh "webhook retry"
+./scripts/search.sh --json webhook retry     # {query, mode, results[], sitemap_matches[]}
 
 # Full index (run once, then use build-index.sh search for best results)
 ./scripts/build-index.sh fetch               # download all docs
 ./scripts/build-index.sh build               # build BM25 index
-./scripts/build-index.sh search <query>      # ranked search
+./scripts/build-index.sh search webhook retry  # multi-word, no quotes needed
 
 # What's new
 ./scripts/recent.sh 7                        # docs updated in last 7 days

@@ -1,6 +1,6 @@
 # openclaw-sage
 
-An [OpenClaw](https://openclaw.ai) skill that makes Claude an expert on [OpenClaw](https://docs.openclaw.ai) documentation — with live doc fetching, BM25 ranked search, section extraction, full-text indexing, and change tracking.
+An [OpenClaw](https://openclaw.ai) skill that makes any agent an expert on [OpenClaw](https://docs.openclaw.ai) documentation — with live doc fetching, BM25 ranked search, section extraction, full-text indexing, and change tracking.
 
 ## Requirements
 

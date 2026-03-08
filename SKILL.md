@@ -86,10 +86,10 @@ url:       https://docs.openclaw.ai/gateway/configuration
 
 ---
 
-### `./scripts/search.sh [--json] <keyword>`
+### `./scripts/search.sh [--json] <keyword...>`
 **Purpose:** Search cached docs and sitemap paths by keyword.
 **When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.
-**Input:** One or more keywords. Add `--json` for machine-readable output.
+**Input:** One or more keywords — quotes are never required (`search.sh webhook retry` works). Add `--json` for machine-readable output.
 
 **Human output (unified format):**
 ```
@@ -119,6 +119,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 **Purpose:** Download all docs to local cache.
 **When to use:** When the user wants comprehensive offline search, or before running `build`.
 **Output:** Progress counter, total docs cached.
+**Errors:** Exits immediately with a clear message if the host is unreachable (no timeout wait).
 
 ### `./scripts/build-index.sh build`
 **Purpose:** Build a full-text BM25 search index from cached docs.
@@ -336,7 +337,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 |---|---|
 | `fetch-doc.sh` returns empty | Run `search.sh <topic>` to find related pages; tell user the path may be wrong |
 | `search.sh` finds nothing | Run `sitemap.sh` and look for related paths; suggest `build-index.sh fetch && build` |
-| Network unavailable | Scripts fall back to cached content automatically; tell user results may be stale |
+| Network unavailable | Scripts detect this upfront (2s check) and immediately print `Offline: cannot reach …`. Fetch scripts fall back to cached content; operations that require live data (`build-index.sh fetch`, `track-changes.sh snapshot/since`) exit cleanly. Tell user results may be stale. |
 | `recent.sh` shows no lastmod dates | Inform user the sitemap may not include dates; suggest `track-changes.sh` for change tracking |
 | Index not built | Offer to guide user through `build-index.sh fetch && build-index.sh build` |
 
