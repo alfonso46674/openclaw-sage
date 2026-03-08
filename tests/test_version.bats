@@ -37,8 +37,9 @@ REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
   [ "$SLUG" = "$NAME" ]
 }
 
-@test "all scripts source lib.sh" {
+@test "all scripts (except lib.sh itself) source lib.sh" {
   for script in "$REPO_ROOT"/scripts/*.sh; do
+    [ "$(basename "$script")" = "lib.sh" ] && continue
     grep -q 'source.*lib\.sh' "$script" || {
       echo "FAIL: $script does not source lib.sh"
       return 1
