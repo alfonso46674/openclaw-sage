@@ -6,7 +6,7 @@ DOC_TTL="${OPENCLAW_SAGE_DOC_TTL:-86400}"           # 24hr default
 LANGS="${OPENCLAW_SAGE_LANGS:-en}"                  # comma-separated lang codes, or "all"
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CACHE_DIR="${OPENCLAW_SAGE_CACHE_DIR:-${_LIB_DIR}/../.cache/openclaw-sage}"
-DOCS_BASE_URL="https://docs.openclaw.ai"
+DOCS_BASE_URL="${OPENCLAW_SAGE_DOCS_BASE_URL:-https://docs.openclaw.ai}"
 
 mkdir -p "$CACHE_DIR"
 

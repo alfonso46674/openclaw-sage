@@ -9,7 +9,16 @@ mkdir -p "$SNAPSHOTS_DIR"
 
 get_current_pages() {
   local sitemap_xml="${CACHE_DIR}/sitemap.xml"
-  curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$sitemap_xml" 2>/dev/null
+  if ! is_cache_fresh "$sitemap_xml" "$SITEMAP_TTL"; then
+    local tmp
+    tmp=$(mktemp)
+    if curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$tmp" 2>/dev/null \
+        && [ -s "$tmp" ]; then
+      mv "$tmp" "$sitemap_xml"
+    else
+      rm -f "$tmp"
+    fi
+  fi
   grep -o '<loc>[^<]*</loc>' "$sitemap_xml" 2>/dev/null \
     | sed 's/<[^>]*>//g' \
     | grep "docs\.openclaw\.ai/" \
