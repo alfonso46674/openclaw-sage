@@ -28,7 +28,7 @@ URL="${DOCS_BASE_URL}/${DOC_PATH}"
 
 # Neither cache file exists — report not cached and exit
 if [ ! -f "$CACHE_FILE" ] && [ ! -f "$HTML_CACHE" ]; then
-  if $JSON; then
+  if $JSON && command -v python3 &>/dev/null; then
     python3 - "$DOC_PATH" "$URL" <<'PYEOF'
 import sys, json
 print(json.dumps({"error": "not_cached", "path": sys.argv[1], "url": sys.argv[2]}))
