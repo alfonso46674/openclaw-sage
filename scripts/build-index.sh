@@ -152,11 +152,11 @@ case "$1" in
     else
       # grep fallback when python3 unavailable
       grep -i "$QUERY" "$INDEX_FILE" \
-        | awk -F'|' '
+        | awk -F'|' -v base_url="$DOCS_BASE_URL" '
             {
               if ($1 != prev) {
                 if (prev != "") print ""
-                print "  [---] " $1 "  ->  https://docs.openclaw.ai/" $1
+                print "  [---] " $1 "  ->  " base_url "/" $1
                 prev = $1
                 count = 0
               }

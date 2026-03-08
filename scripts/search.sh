@@ -134,11 +134,11 @@ elif [ -f "$INDEX_FILE" ]; then
   echo "Note: Install python3 for ranked BM25 results."
   echo ""
   grep -i "$KEYWORD" "$INDEX_FILE" \
-    | awk -F'|' '
+    | awk -F'|' -v base_url="$DOCS_BASE_URL" '
         {
           if ($1 != prev) {
             print ""
-            print "  [---] " $1 "  ->  https://docs.openclaw.ai/" $1
+            print "  [---] " $1 "  ->  " base_url "/" $1
             prev = $1; count = 0
           }
           if (count < 3) { gsub(/^[[:space:]]+/, "", $2); print "        " $2; count++ }
