@@ -1,0 +1,47 @@
+name: Validate
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  validate:
+    name: validate (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install pytest
+        run: pip install pytest
+
+      - name: Install shellcheck and bats (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y shellcheck bats
+
+      - name: Install shellcheck and bats (macOS)
+        if: runner.os == 'macOS'
+        run: brew install shellcheck bats-core
+
+      - name: ShellCheck
+        run: shellcheck --severity=error scripts/*.sh
+
+      - name: Python syntax check
+        run: python3 -m py_compile scripts/bm25_search.py
+
+      - name: pytest — BM25 unit tests
+        run: pytest tests/test_bm25.py -v
+
+      - name: bats — shell integration tests
+        run: bats tests/
