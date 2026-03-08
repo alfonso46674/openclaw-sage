@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **BUG-06** (`track-changes.sh`) — `get_current_pages` unconditionally overwrote `sitemap.xml` on every call, ignoring `$SITEMAP_TTL` and risking corruption if curl failed silently. Now checks `is_cache_fresh` first and only writes via a temp file + `mv` on success.
+
+### Added
+
+- **`OPENCLAW_SAGE_DOCS_BASE_URL`** env var override in `lib.sh` — allows overriding the docs base URL for testing or private mirrors. Consistent with all other `OPENCLAW_SAGE_*` overrides.
+
+---
+
 ## [0.2.2] - 2026-03-08
 
 ### Fixed

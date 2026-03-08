@@ -48,7 +48,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-06 — `get_current_pages` ignores `$SITEMAP_TTL`, corrupts shared cache on failure
 - **File:** `scripts/track-changes.sh:10-17`
-- **Status:** open
+- **Status:** done — ac0efe1
 - **Description:** The function unconditionally overwrites `$CACHE_DIR/sitemap.xml` on every call with a live `curl` request. (1) It ignores `$SITEMAP_TTL`, hammering the server even when the cached sitemap is fresh. (2) If `curl` fails silently (network down, `-sf` suppresses output), it truncates `sitemap.xml` to an empty file, corrupting the shared cache used by `sitemap.sh`, `recent.sh`, and `build-index.sh`.
 - **Fix:** Wrap the fetch in an `is_cache_fresh "$SITEMAP_XML" "$SITEMAP_TTL"` check. If curl fails, do not overwrite the existing file (use a temp file + `mv` only on success).
 
