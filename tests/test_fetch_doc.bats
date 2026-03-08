@@ -122,3 +122,26 @@ _seed_doc() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Section not found"* ]]
 }
+
+# --- BUG-05 regression: offline + missing HTML cache gives clear error ---
+
+@test "--toc without HTML cache exits 1 with offline message when host unreachable (BUG-05 regression)" {
+  # Seeds only .txt (no .html), then points to an unreachable host.
+  # Before the fix this fell through to a misleading "run without --toc first" error.
+  # After the fix it exits immediately with "Offline: cannot fetch HTML...".
+  _seed_doc "test_page" "some content"
+  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='http://127.0.0.1:1' \
+               OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
+               '$FETCH_SH' test/page --toc 2>&1"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Offline"* ]]
+}
+
+@test "--section without HTML cache exits 1 with offline message when host unreachable (BUG-05 regression)" {
+  _seed_doc "test_page" "some content"
+  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='http://127.0.0.1:1' \
+               OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
+               '$FETCH_SH' test/page --section overview 2>&1"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Offline"* ]]
+}

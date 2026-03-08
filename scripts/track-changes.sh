@@ -155,5 +155,6 @@ case "$1" in
 
   *)
     echo "Usage: track-changes.sh {snapshot|list|since <date>|diff <snap1> <snap2>}"
+    exit 1
     ;;
 esac
