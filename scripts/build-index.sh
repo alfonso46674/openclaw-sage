@@ -22,7 +22,7 @@ case "$1" in
       curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
     fi
 
-    ALL_URLS=$(grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" 2>/dev/null | grep "docs\.openclaw\.ai/" | grep -v '^https://docs\.openclaw\.ai/$')
+    ALL_URLS=$(grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" 2>/dev/null | sed 's/<[^>]*>//g' | grep "docs\.openclaw\.ai/" | grep -v '^https://docs\.openclaw\.ai/$')
 
     # Show available languages in the sitemap
     # Language prefix format: "ll/" or "ll-RR/" (e.g. zh-CN/, pt-BR/)

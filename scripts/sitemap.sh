@@ -102,7 +102,8 @@ elif curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/
 fi
 
 if $_fetched; then
-  grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" \
+  grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" \
+    | sed 's/<[^>]*>//g' \
     | grep "docs\.openclaw\.ai/" \
     | sed "s|${DOCS_BASE_URL}/||" \
     | grep -v '^$' \

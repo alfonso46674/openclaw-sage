@@ -10,7 +10,8 @@ mkdir -p "$SNAPSHOTS_DIR"
 get_current_pages() {
   local sitemap_xml="${CACHE_DIR}/sitemap.xml"
   curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$sitemap_xml" 2>/dev/null
-  grep -oP '(?<=<loc>)[^<]+' "$sitemap_xml" 2>/dev/null \
+  grep -o '<loc>[^<]*</loc>' "$sitemap_xml" 2>/dev/null \
+    | sed 's/<[^>]*>//g' \
     | grep "docs\.openclaw\.ai/" \
     | sed "s|${DOCS_BASE_URL}/||" \
     | grep -v '^$' \
