@@ -8,8 +8,12 @@ SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
 
 # Fetch sitemap XML if not cached
 if [ ! -f "$SITEMAP_XML" ]; then
-  echo "Fetching sitemap..." >&2
-  curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+  if check_online; then
+    echo "Fetching sitemap..." >&2
+    curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+  else
+    echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+  fi
 fi
 
 echo "=== Docs updated at source in the last $DAYS days ==="

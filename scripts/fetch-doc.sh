@@ -70,13 +70,27 @@ fetch_and_cache() {
 
 # Ensure plain text is fresh
 if ! is_cache_fresh "$CACHE_FILE" "$DOC_TTL"; then
-  fetch_and_cache
+  if ! check_online; then
+    echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+    if [ -f "$CACHE_FILE" ]; then
+      echo "Using stale cached content for: $DOC_PATH" >&2
+    else
+      echo "No cache for: $DOC_PATH — attempting fetch anyway" >&2
+      fetch_and_cache
+    fi
+  else
+    fetch_and_cache
+  fi
 fi
 
 # --toc / --section need HTML; backfill if cache predates this feature
 if [[ "$MODE" == toc || "$MODE" == section ]] && [ ! -f "$HTML_CACHE" ]; then
-  echo "Fetching HTML for section extraction..." >&2
-  curl -sf --max-time 15 "$URL" -o "$HTML_CACHE" 2>/dev/null
+  if check_online; then
+    echo "Fetching HTML for section extraction..." >&2
+    curl -sf --max-time 15 "$URL" -o "$HTML_CACHE" 2>/dev/null
+  else
+    echo "Offline: cannot fetch HTML for section extraction." >&2
+  fi
 fi
 
 case "$MODE" in

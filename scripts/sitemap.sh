@@ -23,7 +23,12 @@ if $JSON; then
 
   # Ensure sitemap XML is available
   if ! is_cache_fresh "$SITEMAP_XML" "$SITEMAP_TTL"; then
-    curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+    if check_online; then
+      curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+    else
+      echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+      [ -f "$SITEMAP_XML" ] && echo "Using stale cached sitemap." >&2
+    fi
   fi
 
   if [ -f "$SITEMAP_XML" ]; then
@@ -84,7 +89,19 @@ fi
 
 echo "Fetching OpenClaw documentation sitemap..." >&2
 
-if curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
+_fetched=false
+if ! check_online; then
+  echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+  if [ -f "$SITEMAP_CACHE" ]; then
+    echo "Using stale cached sitemap." >&2
+    cat "$SITEMAP_CACHE"
+    exit 0
+  fi
+elif curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
+  _fetched=true
+fi
+
+if $_fetched; then
   grep -oP '(?<=<loc>)[^<]+' "$SITEMAP_XML" \
     | grep "docs\.openclaw\.ai/" \
     | sed "s|${DOCS_BASE_URL}/||" \

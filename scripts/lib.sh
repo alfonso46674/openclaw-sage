@@ -10,6 +10,11 @@ DOCS_BASE_URL="https://docs.openclaw.ai"
 
 mkdir -p "$CACHE_DIR"
 
+# check_online — returns 0 if DOCS_BASE_URL is reachable, 1 if not
+check_online() {
+  curl -sf --max-time 2 -o /dev/null -I "$DOCS_BASE_URL" 2>/dev/null
+}
+
 # is_cache_fresh <file> <ttl_seconds>
 is_cache_fresh() {
   local file="$1" ttl="$2"

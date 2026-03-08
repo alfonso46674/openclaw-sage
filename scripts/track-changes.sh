@@ -19,6 +19,11 @@ get_current_pages() {
 
 case "$1" in
   snapshot)
+    if ! check_online; then
+      echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+      echo "snapshot requires network access to fetch the current doc list." >&2
+      exit 1
+    fi
     TIMESTAMP=$(date +%Y%m%d_%H%M%S)
     SNAPSHOT_FILE="${SNAPSHOTS_DIR}/${TIMESTAMP}.txt"
     echo "Fetching current doc list..." >&2
@@ -79,6 +84,11 @@ case "$1" in
     AFTER_TMP=$(mktemp)
     trap "rm -f $AFTER_TMP" EXIT
     echo "Fetching current doc list for comparison..." >&2
+    if ! check_online; then
+      echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+      echo "Cannot fetch current doc list for comparison." >&2
+      exit 1
+    fi
     get_current_pages > "$AFTER_TMP"
 
     if [ -z "$BEFORE_SNAP" ]; then

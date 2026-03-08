@@ -10,6 +10,12 @@ case "$1" in
   fetch)
     echo "Downloading all docs..."
 
+    if ! check_online; then
+      echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+      echo "fetch requires network access. Run build-index.sh status to see cached docs." >&2
+      exit 1
+    fi
+
     # Ensure sitemap XML is available
     if [ ! -f "$SITEMAP_XML" ]; then
       echo "Fetching sitemap first..." >&2

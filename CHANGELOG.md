@@ -5,11 +5,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.3.0] - 2026-03-08
+## [0.2.1] - 2026-03-08
 
 ### Added
 
 - **`scripts/info.sh`** — lightweight doc metadata from cache only (no network request). Returns title (from `<title>` HTML tag), headings list, word count, cache age/freshness, and URL. Exits 1 with a clear `not_cached` message if the doc hasn't been fetched yet. Supports `--json` and `OPENCLAW_SAGE_OUTPUT=json`. Degrades gracefully when HTML cache or `python3` is unavailable (falls back to word count and cache age from `.txt` file).
+- **Upfront offline detection** across all fetch-capable scripts. `check_online()` (defined in `lib.sh`) performs a 2-second HEAD request before any network operation. On failure: scripts immediately print `Offline: cannot reach <url>` to stderr and either fall back to cached content or exit cleanly. Affected scripts: `fetch-doc.sh`, `sitemap.sh`, `build-index.sh`, `recent.sh`, `track-changes.sh`, `info.sh`. Agents no longer wait for a 10-15s curl timeout before learning the host is unreachable.
 
 ---
 

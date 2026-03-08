@@ -39,8 +39,10 @@ fi
 
 # txt exists but html doesn't (cached before HTML caching was added) — backfill silently
 if [ -f "$CACHE_FILE" ] && [ ! -f "$HTML_CACHE" ]; then
-  curl -sf --max-time 15 "$URL" -o "$HTML_CACHE" 2>/dev/null
-  [ ! -s "$HTML_CACHE" ] && rm -f "$HTML_CACHE"
+  if check_online; then
+    curl -sf --max-time 15 "$URL" -o "$HTML_CACHE" 2>/dev/null
+    [ ! -s "$HTML_CACHE" ] && rm -f "$HTML_CACHE"
+  fi
 fi
 
 if command -v python3 &>/dev/null; then
