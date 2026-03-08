@@ -18,7 +18,9 @@ _seed_doc() {
   # _seed_doc <safe_path> <txt_content> [html_content]
   local safe="$1" txt="$2" html="${3:-}"
   printf '%s\n' "$txt" > "$TEST_CACHE/doc_${safe}.txt"
-  [ -n "$html" ] && printf '%s\n' "$html" > "$TEST_CACHE/doc_${safe}.html"
+  if [ -n "$html" ]; then
+    printf '%s\n' "$html" > "$TEST_CACHE/doc_${safe}.html"
+  fi
 }
 
 # --- Argument validation ---
