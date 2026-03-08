@@ -53,6 +53,39 @@ fetch-doc.sh gateway/configuration --section retry # fetch only that section
 
 ---
 
+### `./scripts/info.sh <path> [--json]`
+**Purpose:** Return lightweight metadata for a cached doc without loading its full content.
+**When to use:** Before fetching a long doc, to confirm it's relevant and estimate token cost from word count and headings.
+**Input:** Doc path. The doc must already be cached — run `fetch-doc.sh <path>` first.
+
+**Output (human):**
+```
+title:     Gateway Configuration | OpenClaw Docs
+headings:  Overview, Authentication, Retry Settings, Logging, Examples
+words:     1,840
+cached_at: 2026-03-06 14:22 (fresh)
+url:       https://docs.openclaw.ai/gateway/configuration
+```
+
+**JSON output:**
+```json
+{
+  "path": "gateway/configuration",
+  "url": "https://docs.openclaw.ai/gateway/configuration",
+  "title": "Gateway Configuration | OpenClaw Docs",
+  "headings": ["Overview", "Authentication", "Retry Settings", "Logging", "Examples"],
+  "word_count": 1840,
+  "cached_at": "2026-03-06 14:22",
+  "fresh": true
+}
+```
+
+**Errors:**
+- `not_cached` (exit 1): doc hasn't been fetched yet. Run `fetch-doc.sh <path>` first.
+- Title/headings missing on first call for docs cached before v0.2.0 — `info.sh` backfills the HTML automatically on that first call.
+
+---
+
 ### `./scripts/search.sh [--json] <keyword>`
 **Purpose:** Search cached docs and sitemap paths by keyword.
 **When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.

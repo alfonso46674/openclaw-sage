@@ -23,10 +23,17 @@ Gives you access to OpenClaw documentation via shell scripts. Docs are fetched f
 | Installation / deployment | `fetch-doc.sh install/docker` or `platforms/<os>` |
 | What's new / recent changes | `recent.sh 7` |
 | Unsure which doc to use | `search.sh <keyword>` |
+| Doc cached, want to check relevance before reading | `info.sh <path>` |
 
 ---
 
 ## Tool Chaining Patterns
+
+### Check before you fetch
+```bash
+./scripts/info.sh gateway/configuration          # 1. Check word count + headings
+./scripts/fetch-doc.sh gateway/configuration --section retry  # 2. Fetch only what you need
+```
 
 ### Long doc — read only what you need
 ```bash
@@ -53,6 +60,10 @@ Gives you access to OpenClaw documentation via shell scripts. Docs are fetched f
 # Sitemap
 ./scripts/sitemap.sh                         # all doc paths, grouped by category
 ./scripts/sitemap.sh --json                  # [{category, paths[]}]
+
+# Doc metadata (cache only — does not fetch)
+./scripts/info.sh <path>                     # title, headings, word count, cache age
+./scripts/info.sh <path> --json              # {path, url, title, headings[], word_count, cached_at, fresh}
 
 # Fetch a doc
 ./scripts/fetch-doc.sh <path>                # full plain text
@@ -102,6 +113,20 @@ Set `OPENCLAW_SAGE_OUTPUT=json` globally, or pass `--json` per call.
 ```
 
 `mode` values: `"bm25"` (ranked, index built) · `"grep"` (unranked, no index) · `"sitemap-only"` (no cached content)
+
+**`info.sh --json` response:**
+```json
+{
+  "path": "gateway/configuration",
+  "url": "https://docs.openclaw.ai/gateway/configuration",
+  "title": "Gateway Configuration | OpenClaw Docs",
+  "headings": ["Overview", "Authentication", "Retry Settings"],
+  "word_count": 1840,
+  "cached_at": "2026-03-06 14:22",
+  "fresh": true
+}
+```
+Error (not cached): `{"error": "not_cached", "path": "...", "url": "..."}` with exit 1.
 
 **`sitemap.sh --json` response:**
 ```json
