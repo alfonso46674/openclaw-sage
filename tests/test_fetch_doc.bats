@@ -115,7 +115,8 @@ _seed_doc() {
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
-  run "$FETCH_SH" test/page --section nonexistent
+  # Merge stderr into stdout so bats captures the error message in $output
+  run bash -c "\"$FETCH_SH\" test/page --section nonexistent 2>&1"
   [ "$status" -eq 1 ]
-  [[ "$output" == *"Section not found"* ]] || [[ "$stderr" == *"Section not found"* ]]
+  [[ "$output" == *"Section not found"* ]]
 }

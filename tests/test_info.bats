@@ -99,7 +99,7 @@ teardown() {
 
 @test "OPENCLAW_SAGE_OUTPUT=json works as --json alternative" {
   printf 'content\n' > "$TEST_CACHE/doc_test_page.txt"
-  OPENCLAW_SAGE_OUTPUT=json run "$INFO_SH" test/page
+  run env OPENCLAW_SAGE_OUTPUT=json OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$INFO_SH" test/page
   [ "$status" -eq 0 ]
   [[ "$output" == *'"word_count"'* ]]
 }
