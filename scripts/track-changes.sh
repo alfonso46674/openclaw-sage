@@ -83,7 +83,7 @@ case "$1" in
 
     # Use current live state as "after"
     AFTER_TMP=$(mktemp)
-    trap "rm -f $AFTER_TMP" EXIT
+    trap 'rm -f "$AFTER_TMP"' EXIT
     echo "Fetching current doc list for comparison..." >&2
     if ! check_online; then
       echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
