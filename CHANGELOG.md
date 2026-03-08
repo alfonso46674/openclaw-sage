@@ -5,6 +5,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **BUG-01** (`search.sh`, `build-index.sh`) — awk grep-fallback path hardcoded `https://docs.openclaw.ai` instead of using `$DOCS_BASE_URL`. Now passes the variable via `awk -v base_url=`.
+- **BUG-02** (`sitemap.sh`, `build-index.sh`, `track-changes.sh`) — `grep -oP` uses PCRE which is unsupported on macOS/BSD grep, causing silent failures. Replaced with POSIX-compatible `grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g'`.
+- **BUG-03** (`track-changes.sh`) — `trap "rm -f $AFTER_TMP" EXIT` expanded the variable at registration time; a `TMPDIR` with spaces would break cleanup. Changed to single-quoted `trap 'rm -f "$AFTER_TMP"' EXIT`.
+- **BUG-04** (`info.sh`) — JSON `not_cached` error was built with `printf "%s"` interpolation, producing invalid JSON for paths containing `"` or `\`. Now emits via Python `json.dumps`.
+- **BUG-05** (`fetch-doc.sh`) — when offline with no HTML cache, `--toc`/`--section` would fall through to a misleading "run without --toc first" error. Now exits immediately with a clear offline message.
+
+---
+
 ## [0.2.1] - 2026-03-08
 
 ### Added

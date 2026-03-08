@@ -14,31 +14,31 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-01 — Hardcoded `docs.openclaw.ai` URL in awk fallback
 - **Files:** `scripts/search.sh:141`, `scripts/build-index.sh:159`
-- **Status:** open
+- **Status:** done — faf8340
 - **Description:** Both files construct result lines with a literal `https://docs.openclaw.ai/` in an awk block instead of using `$DOCS_BASE_URL`. Violates the critical rule and silently produces wrong output when `$DOCS_BASE_URL` is overridden.
 - **Fix:** Pass the variable into awk with `-v base_url="$DOCS_BASE_URL"` and use `base_url` inside the block.
 
 #### BUG-02 — `grep -oP` (PCRE) not available on macOS/BSD — silent failure
 - **Files:** `scripts/sitemap.sh:105`, `scripts/build-index.sh:25`, `scripts/track-changes.sh:13`
-- **Status:** open
+- **Status:** done — b910b4f
 - **Description:** BSD grep (macOS) does not support `-P`. All three scripts use `grep -oP '(?<=<loc>)[^<]+'` to extract URLs from `sitemap.xml`. On macOS this silently returns nothing, leading to misleading "Could not get URL list from sitemap" errors downstream. The macOS CI runner will fail these paths.
 - **Fix:** Replace with a POSIX-safe alternative — either `grep -o '<loc>[^<]*</loc>' | sed 's/<[^>]*>//g'` or a Python one-liner consistent with how the rest of the codebase handles XML (e.g. `python3 -c "import sys,re; [print(m) for m in re.findall(r'<loc>([^<]+)</loc>', sys.stdin.read())]"`).
 
 #### BUG-03 — `trap` with unquoted variable in `track-changes.sh`
 - **File:** `scripts/track-changes.sh:85`
-- **Status:** open
+- **Status:** done — 00374b1
 - **Description:** `trap "rm -f $AFTER_TMP" EXIT` expands `$AFTER_TMP` immediately when the trap is registered. If `TMPDIR` contains spaces, the path is word-split and `rm` receives incorrect arguments. The coding conventions prescribe single-quoted trap strings so the variable expands at exit time.
 - **Fix:** `trap 'rm -f "$AFTER_TMP"' EXIT`
 
 #### BUG-04 — `info.sh` builds JSON error with `printf` + user-interpolated input
 - **File:** `scripts/info.sh:32`
-- **Status:** open
+- **Status:** done — 85ff911
 - **Description:** `printf '{"error":"not_cached","path":"%s","url":"%s"}\n' "$DOC_PATH" "$URL"` interpolates user-supplied path values directly into a JSON string. A path containing `"` or `\` produces invalid JSON. Violates the "Use Python for JSON" convention.
 - **Fix:** Emit the not-cached JSON error via a Python heredoc, passing `$DOC_PATH` and `$URL` as `sys.argv` arguments.
 
 #### BUG-05 — Offline + `--toc`/`--section` shows wrong error message
 - **File:** `scripts/fetch-doc.sh:73-94`
-- **Status:** open
+- **Status:** done — cb02389
 - **Description:** When offline with a stale `.txt` cache but no `.html` cache, the script emits "Using stale cached content" on stderr and continues. The `toc`/`section` branches then fail with "run without --toc first" — which correctly states the symptom but hides the real cause (no HTML because the network is unreachable). The user/agent has no way to know this is an offline issue.
 - **Fix:** In the `toc`/`section` branches, before the "html required" exit, check whether `check_online` would fail and surface "Offline: HTML cache unavailable — fetch with network access first."
 
