@@ -91,3 +91,29 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"providers/discord"* ]]
 }
+
+# --- BUG-01 regression: DOCS_BASE_URL respected in search output ---
+
+@test "search output uses OPENCLAW_SAGE_DOCS_BASE_URL not a hardcoded URL (BUG-01 regression)" {
+  # With an index and python3, the human BM25 path formats URLs using $DOCS_BASE_URL.
+  # This catches any regression where the URL is hardcoded again.
+  printf 'test/page|line containing searchkeyword here\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run env OPENCLAW_SAGE_DOCS_BASE_URL="https://custom.example.com" \
+      OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$SEARCH_SH" searchkeyword
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"custom.example.com"* ]]
+}
+
+@test "--json search output uses OPENCLAW_SAGE_DOCS_BASE_URL (BUG-01 regression)" {
+  printf 'test/page|line containing searchkeyword here\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run env OPENCLAW_SAGE_DOCS_BASE_URL="https://custom.example.com" \
+      OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$SEARCH_SH" --json searchkeyword
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"custom.example.com"* ]]
+}

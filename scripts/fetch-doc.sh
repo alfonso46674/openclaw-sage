@@ -89,7 +89,8 @@ if [[ "$MODE" == toc || "$MODE" == section ]] && [ ! -f "$HTML_CACHE" ]; then
     echo "Fetching HTML for section extraction..." >&2
     curl -sf --max-time 15 "$URL" -o "$HTML_CACHE" 2>/dev/null
   else
-    echo "Offline: cannot fetch HTML for section extraction." >&2
+    echo "Offline: cannot fetch HTML for $DOC_PATH — fetch while online first." >&2
+    exit 1
   fi
 fi
 

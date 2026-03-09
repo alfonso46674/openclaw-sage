@@ -20,6 +20,7 @@ All variables are optional. Defaults work out of the box.
 | `OPENCLAW_SAGE_CACHE_DIR` | `<skill_root>/.cache/openclaw-sage` | Cache directory |
 | `OPENCLAW_SAGE_LANGS` | `en` | Languages to fetch: comma-separated codes (`en,zh`) or `all` |
 | `OPENCLAW_SAGE_OUTPUT` | *(unset)* | Set to `json` for machine-readable output from `search.sh` and `sitemap.sh` |
+| `OPENCLAW_SAGE_DOCS_BASE_URL` | `https://docs.openclaw.ai` | Override the base docs URL (useful for testing or private mirrors) |
 
 Examples:
 ```bash

@@ -1,6 +1,15 @@
 ---
 name: openclaw-sage
 description: OpenClaw documentation expert — answers user questions about OpenClaw setup, configuration, providers, troubleshooting, and what's new using live doc fetching, BM25 search, and change tracking
+version: 0.2.2
+metadata:
+  openclaw:
+    requires:
+      bins:
+        - curl
+      anyBins:
+        - python3
+        - python
 ---
 
 # OpenClaw Documentation Expert

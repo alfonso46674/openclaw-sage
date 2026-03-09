@@ -100,10 +100,11 @@ If you need a new TTL, add it to `lib.sh` as an `OPENCLAW_SAGE_*` variable.
 
 ### Temp files
 
-Always clean up with `trap`:
+Always clean up with `trap`. Use single quotes so the variable expands at exit time, not when the trap is registered:
 ```bash
 TMP=$(mktemp)
-trap "rm -f $TMP" EXIT
+trap 'rm -f "$TMP"' EXIT   # correct — single-quoted, expands at exit
+trap "rm -f $TMP" EXIT     # wrong  — double-quoted, expands now; breaks if TMPDIR has spaces
 ```
 
 ---
@@ -167,10 +168,39 @@ JSON output must be the only thing on stdout. Error messages go to stderr as pla
 
 ### When to use Python
 
-- JSON serialization (always)
+- JSON serialization (always — never build JSON with bash string ops)
 - XML parsing (`sitemap.xml`, HTML heading extraction)
 - BM25 math and ranking
 - Date arithmetic
+
+### When NOT to use Python (keep it in bash)
+
+Calling `python3` has overhead and adds an optional dependency. Do not invoke it for operations bash handles natively:
+
+- String manipulation (`tr`, `sed`, `awk`, parameter expansion)
+- Simple arithmetic (`$(( ))`)
+- File existence and size checks
+- Emitting a plain-text error message
+
+When a code path needs to emit JSON **and** `python3` may not be available, prefer a `command -v python3` guard with a plain-text fallback rather than forcing the Python call:
+
+```bash
+# Correct — JSON when possible, plain text when not
+if $JSON && command -v python3 &>/dev/null; then
+  python3 - "$value" <<'PYEOF'
+import sys, json
+print(json.dumps({"key": sys.argv[1]}))
+PYEOF
+else
+  echo "Error: $value"
+fi
+
+# Wrong — unconditional python3 call for a trivial error string
+python3 - "$value" <<'PYEOF'
+import sys, json
+print(json.dumps({"error": sys.argv[1]}))
+PYEOF
+```
 
 ### Inline heredoc vs separate file
 
@@ -215,6 +245,9 @@ PYEOF
 | Put emoji in JSON output or structured result lines | Breaks machine parsing |
 | Build JSON with bash string concatenation | Escaping is unreliable; use Python |
 | Skip sourcing `lib.sh` | Cache dir won't be set, shared functions unavailable |
+| Call `python3` for trivial string or error output | Adds latency and an optional dependency; use bash natively |
+| Use double-quoted `trap "rm -f $TMP" EXIT` | Variable expands at registration, not at exit; use single quotes |
+| Use `grep -P` (PCRE) | Not available on macOS/BSD grep; use `grep -o` + `sed` instead |
 
 ---
 

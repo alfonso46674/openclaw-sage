@@ -9,8 +9,18 @@ mkdir -p "$SNAPSHOTS_DIR"
 
 get_current_pages() {
   local sitemap_xml="${CACHE_DIR}/sitemap.xml"
-  curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$sitemap_xml" 2>/dev/null
-  grep -oP '(?<=<loc>)[^<]+' "$sitemap_xml" 2>/dev/null \
+  if ! is_cache_fresh "$sitemap_xml" "$SITEMAP_TTL"; then
+    local tmp
+    tmp=$(mktemp)
+    if curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$tmp" 2>/dev/null \
+        && [ -s "$tmp" ]; then
+      mv "$tmp" "$sitemap_xml"
+    else
+      rm -f "$tmp"
+    fi
+  fi
+  grep -o '<loc>[^<]*</loc>' "$sitemap_xml" 2>/dev/null \
+    | sed 's/<[^>]*>//g' \
     | grep "docs\.openclaw\.ai/" \
     | sed "s|${DOCS_BASE_URL}/||" \
     | grep -v '^$' \
@@ -82,7 +92,7 @@ case "$1" in
 
     # Use current live state as "after"
     AFTER_TMP=$(mktemp)
-    trap "rm -f $AFTER_TMP" EXIT
+    trap 'rm -f "$AFTER_TMP"' EXIT
     echo "Fetching current doc list for comparison..." >&2
     if ! check_online; then
       echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
@@ -145,5 +155,6 @@ case "$1" in
 
   *)
     echo "Usage: track-changes.sh {snapshot|list|since <date>|diff <snap1> <snap2>}"
+    exit 1
     ;;
 esac
