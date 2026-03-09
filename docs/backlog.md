@@ -104,6 +104,12 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Description:** The macOS (`stat -f %m`) vs Linux (`stat -c %Y`) branch is copy-pasted in three places. The canonical version is in `lib.sh`; the others exist because they need the raw mtime integer for display (not just a freshness boolean). `is_cache_fresh` doesn't expose the value.
 - **Fix:** Add a `get_mtime <file>` helper to `lib.sh` that returns the epoch integer. Call it from all three sites.
 
+#### BUG-16 — Progress display garbles when a shorter path follows a longer one
+- **File:** `scripts/build-index.sh:76`
+- **Status:** open
+- **Description:** The fetch progress line uses `printf "\r  [%d/%d] %s          "` with a fixed number of trailing spaces. When a shorter path follows a longer one, the carriage return moves the cursor to column 0 but the spaces don't fully overwrite the leftover characters, leaving garbage visible (e.g., `zh-CN                         s          ubleshooting`). Cosmetic only — fetching is correct.
+- **Fix:** Pad the path field to a fixed width using `printf "\r  [%d/%d] %-40s" "$count" "$total" "$path"` so the column is always fully overwritten, or truncate long paths to a maximum width with a trailing `…`.
+
 #### BUG-15 — `snippets/common-configs.md` references outdated model name
 - **File:** `snippets/common-configs.md`
 - **Status:** open
@@ -180,6 +186,17 @@ Grouped by effort. Items within each tier are ordered by agent value.
 - **Description:** Append each `search.sh` query to `$CACHE_DIR/query_history.log` (format: `<ISO8601_timestamp> <query>`). Useful for debugging what agents searched, and as future input for BM25 parameter tuning.
 - **Implementation notes:** Single `printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$KEYWORD" >> "$QUERY_LOG"` in `search.sh`. No new dependencies.
 
+#### ENH-19 — Content-change tracking (page-level diffing)
+- **Status:** proposed
+- **Description:** `track-changes.sh` tracks structural changes (pages added/removed from sitemap). It cannot detect when an existing page's *content* changes. This enhancement adds content-change awareness by storing a checksum for each cached doc and comparing on re-fetch.
+- **Context:** docs.openclaw.ai is a **living single-version** documentation site (confirmed by research — no versioned URLs, no version metadata in HTML, no changelog page). There is no concept of "docs for v1.0 vs v2.0". Content evolves continuously and is only distinguishable via timestamps and checksums.
+- **Implementation notes:**
+  - On each doc fetch (in `fetch_and_cache` / `build-index.sh fetch`), compute `sha256sum doc_<path>.txt` and store to `doc_<path>.sha256` in `$CACHE_DIR`.
+  - Before overwriting the `.txt`, compare the new checksum against the stored one.
+  - `build-index.sh fetch` or a new `cache.sh diff-content` subcommand can report which docs changed content since last fetch.
+  - Output format: `[changed] gateway/configuration`, `[unchanged] providers/discord`, `[new] automation/webhook`.
+- **Agent value:** Allows an agent to run `build-index.sh fetch` and immediately know which specific docs have been updated — not just which pages exist. Useful for "what changed in the docs since I last checked?" workflows.
+
 #### ENH-18 — `prefetch.sh <topic>`
 - **Status:** proposed
 - **Description:** Search for a topic, then bulk-fetch the top N results in one call. Warms the cache for an entire subject area without requiring the agent to orchestrate search → loop → fetch.
@@ -194,9 +211,9 @@ The following scripts have no bats tests. Adding coverage for at least the offli
 
 | Script | Priority | Key scenarios to cover |
 |--------|----------|----------------------|
-| `scripts/sitemap.sh` | High | offline fallback (human + JSON), cached sitemap served, `--json` structure |
+| `scripts/sitemap.sh` | ~~High~~ | covered by `tests/test_sitemap.bats` |
 | `scripts/recent.sh` | Medium | no-sitemap path, `$DAYS` validation, `--json` output |
-| `scripts/track-changes.sh` | Medium | `snapshot` creates file, `list` output, `diff` between two snapshots |
+| `scripts/track-changes.sh` | ~~Medium~~ | covered by `tests/test_track_changes.bats` |
 
 ---
 
