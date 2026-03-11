@@ -97,7 +97,7 @@ case "$1" in
       exit 1
     fi
 
-    > "$INDEX_FILE"
+    : > "$INDEX_FILE"
     doc_count=0
     for f in "$CACHE_DIR"/doc_*.txt; do
       path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
