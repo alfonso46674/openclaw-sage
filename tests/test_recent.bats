@@ -66,6 +66,35 @@ XML
 # BUG-08 — TTL-based sitemap refresh
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# BUG-17 — hardcoded URL regression in recent.sh
+# ---------------------------------------------------------------------------
+
+@test "BUG-17: recent.sh uses DOCS_BASE_URL not hardcoded URL for path extraction" {
+  # Seed a sitemap with a custom base URL
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://custom.example.com/gateway/configuration</loc>
+    <lastmod>2099-01-01</lastmod>
+  </url>
+</urlset>
+XML
+  run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
+               OPENCLAW_SAGE_DOCS_BASE_URL='https://custom.example.com' \
+               '$RECENT_SH' 9999 2>&1"
+  [ "$status" -eq 0 ]
+  # The path should be extracted correctly (not contain the full URL or wrong prefix)
+  [[ "$output" == *"gateway/configuration"* ]]
+  # Should NOT still contain the old hardcoded URL residue
+  [[ "$output" != *"https://custom.example.com/gateway/configuration"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# BUG-08 — TTL-based sitemap refresh
+# ---------------------------------------------------------------------------
+
 @test "BUG-08: stale sitemap triggers re-fetch attempt when online" {
   _seed_sitemap
   # Make the file appear older than SITEMAP_TTL (1 hour = 3600s) by setting mtime to 2 hours ago

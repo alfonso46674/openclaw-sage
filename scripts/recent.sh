@@ -28,13 +28,14 @@ echo ""
 
 if [ -f "$SITEMAP_XML" ]; then
   # Parse lastmod dates using python3 (widely available)
-  python3 - "$SITEMAP_XML" "$DAYS" <<'PYEOF'
+  python3 - "$SITEMAP_XML" "$DAYS" "$DOCS_BASE_URL" <<'PYEOF'
 import sys
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
 sitemap_file = sys.argv[1]
 days = int(sys.argv[2])
+base_url = sys.argv[3]
 
 try:
     tree = ET.parse(sitemap_file)
@@ -51,7 +52,7 @@ try:
                 dt_str = lastmod.text.strip()[:10]
                 dt = datetime.fromisoformat(dt_str).replace(tzinfo=timezone.utc)
                 if dt >= cutoff:
-                    path = loc.text.replace('https://docs.openclaw.ai/', '')
+                    path = loc.text.replace(base_url + '/', '')
                     recent.append((dt, path))
             except Exception:
                 pass

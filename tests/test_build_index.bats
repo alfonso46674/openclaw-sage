@@ -75,6 +75,23 @@ XML
 }
 
 # ---------------------------------------------------------------------------
+# BUG-17 — hardcoded URL regression in build-index.sh
+# ---------------------------------------------------------------------------
+
+@test "BUG-17: build-index search output uses DOCS_BASE_URL not hardcoded URL" {
+  echo "searchterm in doc content" > "$TEST_CACHE/doc_test_page.txt"
+  printf 'test/page|searchterm in doc content\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='https://custom.example.com' \
+               OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
+               '$BUILD_INDEX_SH' search searchterm 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"custom.example.com"* ]]
+}
+
+# ---------------------------------------------------------------------------
 # build-index status
 # ---------------------------------------------------------------------------
 

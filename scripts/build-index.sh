@@ -22,14 +22,14 @@ case "$1" in
       curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
     fi
 
-    ALL_URLS=$(grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" 2>/dev/null | sed 's/<[^>]*>//g' | grep "docs\.openclaw\.ai/" | grep -v '^https://docs\.openclaw\.ai/$')
+    ALL_URLS=$(grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" 2>/dev/null | sed 's/<[^>]*>//g' | grep "${DOCS_BASE_URL}/" | grep -v "^${DOCS_BASE_URL}/$")
 
     # Show available languages in the sitemap
     # Language prefix format: "ll/" or "ll-RR/" (e.g. zh-CN/, pt-BR/)
-    available_langs=$(echo "$ALL_URLS" | awk '
+    available_langs=$(echo "$ALL_URLS" | awk -v base_url="$DOCS_BASE_URL" '
       {
         path = $0
-        sub(/https:\/\/docs\.openclaw\.ai\//, "", path)
+        sub(base_url "/", "", path)
         if (match(path, /^[a-z][a-z](-[A-Za-z]+)?\//))
           lang = substr(path, 1, RLENGTH - 1)
         else
@@ -46,10 +46,10 @@ case "$1" in
     if [ "$LANGS" = "all" ]; then
       URLS="$ALL_URLS"
     else
-      URLS=$(echo "$ALL_URLS" | awk -v langs=",$LANGS," '
+      URLS=$(echo "$ALL_URLS" | awk -v langs=",$LANGS," -v base_url="$DOCS_BASE_URL" '
         {
           url = $0
-          sub(/https:\/\/docs\.openclaw\.ai\//, "", url)
+          sub(base_url "/", "", url)
           if (match(url, /^[a-z][a-z](-[A-Za-z]+)?\//))
             lang = substr(url, 1, 2)   # base code only: "zh-CN" → "zh"
           else
@@ -69,7 +69,7 @@ case "$1" in
     new=0
 
     while IFS= read -r url; do
-      path=$(echo "$url" | sed 's|https://docs\.openclaw\.ai/||')
+      path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
       [ -z "$path" ] && continue
       cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
       count=$((count + 1))
