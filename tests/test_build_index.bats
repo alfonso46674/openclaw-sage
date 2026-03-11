@@ -42,6 +42,59 @@ teardown() {
   [ ! -f "$TEST_CACHE/doc_missing_page.html" ]
 }
 
+# ---------------------------------------------------------------------------
+# BUG-20 — error message goes to stderr, not stdout
+# ---------------------------------------------------------------------------
+
+@test "BUG-20: fetch empty-URL error goes to stderr not stdout" {
+  # Seed a sitemap with URLs that won't match the LANGS filter
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/xx/nonexistent</loc></url>
+</urlset>
+XML
+  # Use a wrapper that stubs check_online so the script gets past the online check
+  local stderr_file="$TEST_CACHE/stderr.txt"
+  local stdout_file="$TEST_CACHE/stdout.txt"
+  bash -c "
+    export OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE'
+    export OPENCLAW_SAGE_DOCS_BASE_URL='https://docs.openclaw.ai'
+    export OPENCLAW_SAGE_LANGS='en'
+    # Stub check_online in lib.sh by defining it after sourcing
+    source '$REPO_ROOT/scripts/lib.sh'
+    check_online() { return 0; }
+    # Source the script to get the case block, passing 'fetch' as \$1
+    set -- fetch
+    source '$BUILD_INDEX_SH'
+  " >"$stdout_file" 2>"$stderr_file" || true
+  # Error should be in stderr
+  grep -q "Error: Could not get URL list" "$stderr_file"
+  # Error should NOT be in stdout
+  ! grep -q "Error: Could not get URL list" "$stdout_file"
+}
+
+# ---------------------------------------------------------------------------
+# BUG-17 — hardcoded URL regression in build-index.sh
+# ---------------------------------------------------------------------------
+
+@test "BUG-17: build-index search output uses DOCS_BASE_URL not hardcoded URL" {
+  echo "searchterm in doc content" > "$TEST_CACHE/doc_test_page.txt"
+  printf 'test/page|searchterm in doc content\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='https://custom.example.com' \
+               OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
+               '$BUILD_INDEX_SH' search searchterm 2>&1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"custom.example.com"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# build-index status
+# ---------------------------------------------------------------------------
+
 @test "BUG-07: build-index status shows correct doc count after fetch_and_cache" {
   # Seed two pre-fetched docs (simulating what a successful fetch_and_cache would produce)
   echo "<html><body>Doc one</body></html>" > "$TEST_CACHE/doc_providers_discord.html"

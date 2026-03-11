@@ -101,7 +101,7 @@
 {
   "agents": {
     "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
+      "model": "anthropic/claude-sonnet-4-6"
     }
   }
 }

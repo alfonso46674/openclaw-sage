@@ -178,6 +178,6 @@ if [ "$found" -eq 0 ]; then
   echo "  3. Build search index:    ./scripts/build-index.sh build"
 fi
 
-echo "Tip: For comprehensive ranked results:"
-echo "  ./scripts/build-index.sh fetch && ./scripts/build-index.sh build"
-echo "  ./scripts/build-index.sh search \"$KEYWORD\""
+echo "Tip: For comprehensive ranked results:" >&2
+echo "  ./scripts/build-index.sh fetch && ./scripts/build-index.sh build" >&2
+echo "  ./scripts/build-index.sh search \"$KEYWORD\"" >&2

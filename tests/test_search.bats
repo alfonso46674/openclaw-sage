@@ -107,6 +107,15 @@ teardown() {
   [[ "$output" == *"custom.example.com"* ]]
 }
 
+# --- BUG-19 regression: diagnostic tip must not appear on stdout ---
+
+@test "BUG-19: Tip text does not appear on stdout" {
+  echo "webhook retry guide" > "$TEST_CACHE/doc_automation_webhook.txt"
+  run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' '$SEARCH_SH' webhook 2>/dev/null"
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"Tip:"* ]]
+}
+
 @test "--json search output uses OPENCLAW_SAGE_DOCS_BASE_URL (BUG-01 regression)" {
   printf 'test/page|line containing searchkeyword here\n' > "$TEST_CACHE/index.txt"
   if ! command -v python3 &>/dev/null; then

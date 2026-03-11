@@ -16,29 +16,34 @@ Organized by severity. Each finding links to a backlog item where applicable.
 - **Line:** `> "$INDEX_FILE"`
 - **Issue:** Truncates the index file using a bare redirection, which works but is a shellcheck warning and confusing to read.
 - **Fix:** `: > "$INDEX_FILE"` or `true > "$INDEX_FILE"`.
+- **Status:** resolved — 9f08276
 
 #### I-2. Hardcoded `docs.openclaw.ai` in `recent.sh` Python block
 - **Script:** `scripts/recent.sh:47`
 - **Line:** `path = loc.text.replace('https://docs.openclaw.ai/', '')`
 - **Issue:** Same class as BUG-01. `$DOCS_BASE_URL` is not passed into the Python heredoc. Produces wrong paths when the base URL is overridden.
 - **Backlog:** BUG-17
+- **Status:** resolved — 1160746
 
 #### I-3. Hardcoded URL in `build-index.sh` fetch loop
 - **Script:** `scripts/build-index.sh:72`
 - **Line:** `path=$(echo "$url" | sed 's|https://docs\.openclaw\.ai/||')`
 - **Issue:** Same class as BUG-01. Should use `$DOCS_BASE_URL`.
 - **Backlog:** BUG-17
+- **Status:** resolved — 1160746
 
 #### I-4. Hardcoded URLs in `build-index.sh` awk language detection
 - **Script:** `scripts/build-index.sh:32,52`
 - **Lines:** `sub(/https:\/\/docs\.openclaw\.ai\//, "", path)`
 - **Issue:** Two awk blocks use literal URL instead of `-v base_url="$DOCS_BASE_URL"`.
 - **Backlog:** BUG-17
+- **Status:** resolved — 1160746
 
 #### I-5. `fetch-doc.sh` local `fetch_and_cache` shadows `lib.sh` shared version
 - **Script:** `scripts/fetch-doc.sh:39-69`
 - **Issue:** Defines a local function with the same name as the shared `lib.sh` version. References outer-scope variables instead of arguments. Risk of silent shadowing and drift.
 - **Backlog:** BUG-18
+- **Status:** resolved — 5520b39
 
 #### I-6. Hardcoded fallback sitemap lists duplicated in `sitemap.sh`
 - **Script:** `scripts/sitemap.sh:62-79` and `scripts/sitemap.sh:126-139`
@@ -67,16 +72,19 @@ Organized by severity. Each finding links to a backlog item where applicable.
 - **Script:** `scripts/search.sh:181-183`
 - **Issue:** Non-result text ("Tip: For comprehensive ranked results...") always goes to stdout, polluting agent-parseable output.
 - **Backlog:** BUG-19
+- **Status:** resolved — 923fc02
 
 #### M-5. `build-index.sh` error to stdout
 - **Script:** `scripts/build-index.sh:63`
 - **Issue:** Error message goes to stdout instead of stderr.
 - **Backlog:** BUG-20
+- **Status:** resolved — 9ebb8b7
 
 #### M-6. Outdated model name in `snippets/common-configs.md`
 - **Script:** `snippets/common-configs.md:104`
 - **Issue:** References `claude-sonnet-4-5` instead of `claude-sonnet-4-6`.
 - **Backlog:** BUG-15
+- **Status:** resolved — e21b067
 
 ---
 
@@ -97,24 +105,24 @@ Organized by severity. Each finding links to a backlog item where applicable.
 | Convention | Status | Violating Scripts |
 |---|---|---|
 | Source `lib.sh` first | **Pass** | -- |
-| Use `$CACHE_DIR` / `$DOCS_BASE_URL` (no hardcoding) | **Fail** | `recent.sh:47`, `build-index.sh:32,52,72` (BUG-17) |
-| stdout is data, stderr is diagnostics | **Fail** | `search.sh:181-183` (BUG-19), `build-index.sh:63` (BUG-20) |
+| Use `$CACHE_DIR` / `$DOCS_BASE_URL` (no hardcoding) | **Pass** | -- (BUG-17 fixed in 1160746) |
+| stdout is data, stderr is diagnostics | **Pass** | -- (BUG-19 fixed in 923fc02, BUG-20 fixed in 9ebb8b7) |
 | Use Python for JSON (never bash string concatenation) | **Pass** | -- |
 | No uncached network requests | **Pass** | -- |
 | Trap with single quotes | **Pass** | -- |
 | No `grep -P` (PCRE) | **Pass** | -- |
 | Use `is_cache_fresh` for TTL checks (no bare existence checks) | **Pass** | -- |
-| No duplicate function definitions | **Fail** | `fetch-doc.sh:39-69` shadows `lib.sh` `fetch_and_cache` (BUG-18) |
+| No duplicate function definitions | **Pass** | -- (BUG-18 fixed in 5520b39) |
 
 ---
 
 ## Test Suite Summary
 
 ```
-bats tests/   → 100/100 passed
+bats tests/   → 105/105 passed
 pytest tests/  → 24/24 passed
 shellcheck --severity=error → 0 errors
-shellcheck --severity=info  → 20 findings (see above)
+shellcheck --severity=info  → 12 findings (see above; 8 resolved in v0.2.4)
 ```
 
 See backlog "Test Coverage Gaps" section for per-script gap analysis.

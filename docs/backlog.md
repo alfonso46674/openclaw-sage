@@ -44,7 +44,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-17 — Additional hardcoded `docs.openclaw.ai` URLs missed by BUG-01 fix
 - **Files:** `scripts/recent.sh:47`, `scripts/build-index.sh:32,52,72`
-- **Status:** open
+- **Status:** done — 1160746
 - **Description:** Same class as BUG-01 but in different code paths not covered by the original fix:
   1. `recent.sh:47` — Python heredoc has `path = loc.text.replace('https://docs.openclaw.ai/', '')` instead of using `$DOCS_BASE_URL` passed via `sys.argv`.
   2. `build-index.sh:32,52` — awk language detection blocks use literal `sub(/https:\/\/docs\.openclaw\.ai\//, "", path)` instead of `-v base_url="$DOCS_BASE_URL"`.
@@ -90,25 +90,25 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-15 — `snippets/common-configs.md` references outdated model name
 - **File:** `snippets/common-configs.md`
-- **Status:** open
+- **Status:** done — e21b067
 - **Description:** Line 105 uses `"anthropic/claude-sonnet-4-5"` while `SKILL.md` references `"anthropic/claude-sonnet-4-6"`. Both documents should reference the same current model.
 - **Fix:** Update `snippets/common-configs.md` to use `claude-sonnet-4-6`.
 
 #### BUG-18 — `fetch-doc.sh` local `fetch_and_cache` duplicates the `lib.sh` shared version
 - **File:** `scripts/fetch-doc.sh:39-69`
-- **Status:** open
+- **Status:** done — 5520b39
 - **Description:** `fetch-doc.sh` defines its own `fetch_and_cache()` (lines 39–69) that is nearly identical to the shared version added to `lib.sh` during the BUG-07 fix. The local version references outer-scope variables (`$URL`, `$HTML_CACHE`, `$CACHE_FILE`) instead of accepting arguments. Two functions with the same name in the same call chain is confusing and risks silent shadowing if `lib.sh`'s version is expected.
 - **Fix:** Remove the local `fetch_and_cache` definition. Call the `lib.sh` version: `fetch_and_cache "$URL" "$SAFE_PATH"`. The existing error messages ("Failed to fetch", "Empty response") should move to the caller since the lib version is intentionally generic.
 
 #### BUG-19 — `search.sh` sends diagnostic text to stdout
 - **File:** `scripts/search.sh:181-183`
-- **Status:** open
+- **Status:** done — 923fc02
 - **Description:** The "Tip: For comprehensive ranked results..." lines are always printed to stdout even when results were found. Agents parsing stdout receive unexpected non-result text. Violates the "stdout is data, stderr is diagnostics" convention.
 - **Fix:** Redirect the "Tip:" block to `>&2`, or omit it entirely when results were found (only print as guidance when `found=0`).
 
 #### BUG-20 — `build-index.sh` error message goes to stdout instead of stderr
 - **File:** `scripts/build-index.sh:63`
-- **Status:** open
+- **Status:** done — 9ebb8b7
 - **Description:** `echo "Error: Could not get URL list from sitemap..."` is written to stdout. Should go to stderr per output conventions.
 - **Fix:** Add `>&2` to the echo.
 
@@ -351,13 +351,13 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 
 | Script | Test File | Priority | Key gaps |
 |--------|-----------|----------|----------|
-| `scripts/build-index.sh` | `test_build_index.bats` (4) | **High** | `build` and `search` subcommands untested (80+ lines). Only `status` and `fetch_and_cache` covered. |
-| `scripts/search.sh` | `test_search.bats` (11) | **Medium** | BM25-ranked path not tested (requires seeded index). `OPENCLAW_SAGE_OUTPUT=json` not tested for search. |
+| `scripts/build-index.sh` | `test_build_index.bats` (6) | **High** | `build` and `search` subcommands untested (80+ lines). Only `status`, `fetch_and_cache`, and error routing covered. |
+| `scripts/search.sh` | `test_search.bats` (13) | **Medium** | BM25-ranked path not tested (requires seeded index). `OPENCLAW_SAGE_OUTPUT=json` not tested for search. |
 | `scripts/lib.sh` | `test_lib.bats` (11) | **Medium** | `fetch_text` not tested. `check_online` not tested. `fetch_and_cache` only tested via `test_build_index.bats` with file:// URLs. |
 | `scripts/info.sh` | `test_info.bats` (9) | **Medium** | `python3` unavailable fallback not tested. HTML backfill path not tested. |
-| `scripts/recent.sh` | `test_recent.bats` (7) | **Low** | `find -mtime` section not tested with seeded docs. |
+| `scripts/recent.sh` | `test_recent.bats` (8) | **Low** | `find -mtime` section not tested with seeded docs. |
 | `scripts/sitemap.sh` | `test_sitemap.bats` (8) | **Low** | Offline fallback with stale cache. JSON error when python3 missing. |
-| `scripts/fetch-doc.sh` | `test_fetch_doc.bats` (11) | **Low** | Offline fallback with stale `.txt` cache. `--max-lines 0` edge case. |
+| `scripts/fetch-doc.sh` | `test_fetch_doc.bats` (13) | **Low** | Offline fallback with stale `.txt` cache. `--max-lines 0` edge case. |
 | `scripts/cache.sh` | `test_cache.bats` (12) | -- | Good coverage. |
 | `scripts/track-changes.sh` | `test_track_changes.bats` (11) | -- | Good coverage. |
 | `scripts/bm25_search.py` | `test_bm25.py` (24) | -- | Good coverage. |
