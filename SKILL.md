@@ -1,7 +1,7 @@
 ---
 name: openclaw-sage
 description: OpenClaw documentation expert — answers user questions about OpenClaw setup, configuration, providers, troubleshooting, and what's new using live doc fetching, BM25 search, and change tracking
-version: 0.2.2
+version: 0.2.3
 metadata:
   openclaw:
     requires:
@@ -125,8 +125,8 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ---
 
 ### `./scripts/build-index.sh fetch`
-**Purpose:** Download all docs to local cache.
-**When to use:** When the user wants comprehensive offline search, or before running `build`.
+**Purpose:** Download all docs to local cache (both `.html` and `.txt`).
+**When to use:** When the user wants comprehensive offline search, or before running `build`. After fetching, `--toc`, `--section`, and `info.sh` all work offline without a second network request.
 **Output:** Progress counter, total docs cached.
 **Errors:** Exits immediately with a clear message if the host is unreachable (no timeout wait).
 
@@ -165,7 +165,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 
 ### `./scripts/recent.sh [days]`
 **Purpose:** Show docs updated recently.
-**Input:** Number of days (default: 7).
+**Input:** Number of days — must be a positive integer (default: 7). Non-numeric values exit 1 with a usage message.
 **Output:**
 - `=== Docs updated at source in the last N days ===` — from sitemap `lastmod` dates
 - `=== Recently accessed locally (last N days) ===` — by local file mtime
