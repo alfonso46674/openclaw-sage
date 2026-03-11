@@ -36,34 +36,12 @@ CACHE_FILE="${CACHE_DIR}/doc_${SAFE_PATH}.txt"
 HTML_CACHE="${CACHE_DIR}/doc_${SAFE_PATH}.html"
 URL="${DOCS_BASE_URL}/${DOC_PATH}"
 
-fetch_and_cache() {
+# Fetch doc using the shared lib.sh fetch_and_cache, with fetch-doc-specific error handling
+_do_fetch() {
   echo "Fetching: $URL" >&2
-
-  # Fetch raw HTML — single HTTP request, caches both HTML and derived plain text
-  if ! curl -sf --max-time 15 "$URL" -o "$HTML_CACHE" 2>/dev/null || [ ! -s "$HTML_CACHE" ]; then
-    rm -f "$HTML_CACHE"
+  if ! fetch_and_cache "$URL" "$SAFE_PATH"; then
     echo "Error: Failed to fetch: $URL" >&2
     echo "Check the path is valid. Run ./scripts/sitemap.sh to see available docs." >&2
-    exit 1
-  fi
-
-  # Convert cached HTML to plain text (no second HTTP request)
-  if command -v lynx &>/dev/null; then
-    lynx -dump -nolist "file://${HTML_CACHE}" 2>/dev/null > "$CACHE_FILE"
-  elif command -v w3m &>/dev/null; then
-    w3m -dump "$HTML_CACHE" 2>/dev/null > "$CACHE_FILE"
-  else
-    sed 's/<script[^>]*>.*<\/script>//gI' "$HTML_CACHE" \
-      | sed 's/<style[^>]*>.*<\/style>//gI' \
-      | sed 's/<[^>]*>//g' \
-      | sed 's/&amp;/\&/g; s/&lt;/</g; s/&gt;/>/g; s/&quot;/"/g; s/&#39;/'"'"'/g; s/&nbsp;/ /g' \
-      | sed '/^[[:space:]]*$/d' \
-      > "$CACHE_FILE"
-  fi
-
-  if [ ! -s "$CACHE_FILE" ]; then
-    rm -f "$CACHE_FILE"
-    echo "Error: Empty response for: $URL" >&2
     exit 1
   fi
 }
@@ -76,10 +54,10 @@ if ! is_cache_fresh "$CACHE_FILE" "$DOC_TTL"; then
       echo "Using stale cached content for: $DOC_PATH" >&2
     else
       echo "No cache for: $DOC_PATH — attempting fetch anyway" >&2
-      fetch_and_cache
+      _do_fetch
     fi
   else
-    fetch_and_cache
+    _do_fetch
   fi
 fi
 

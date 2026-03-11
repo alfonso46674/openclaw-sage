@@ -125,6 +125,15 @@ _seed_doc() {
 
 # --- BUG-05 regression: offline + missing HTML cache gives clear error ---
 
+# --- BUG-18 regression: no local fetch_and_cache shadowing lib.sh ---
+
+@test "BUG-18: fetch-doc.sh does not define its own fetch_and_cache function" {
+  # Verify the script no longer contains a local fetch_and_cache definition
+  ! grep -q '^fetch_and_cache()' "$FETCH_SH"
+}
+
+# --- BUG-05 regression: offline + missing HTML cache gives clear error ---
+
 @test "--toc without HTML cache exits 1 with offline message when host unreachable (BUG-05 regression)" {
   # Seeds only .txt (no .html), then points to an unreachable host.
   # Before the fix this fell through to a misleading "run without --toc first" error.
