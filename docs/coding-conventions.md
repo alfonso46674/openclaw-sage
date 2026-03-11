@@ -98,6 +98,23 @@ is_cache_fresh "$SITEMAP_CACHE" "$SITEMAP_TTL"
 
 If you need a new TTL, add it to `lib.sh` as an `OPENCLAW_SAGE_*` variable.
 
+### Dual-cache design (`.html` + `.txt`)
+
+Every fetched doc is stored as two files:
+
+| File | Used by |
+|---|---|
+| `doc_<safe>.html` | `fetch-doc.sh --toc`, `fetch-doc.sh --section`, `info.sh` (title + headings) |
+| `doc_<safe>.txt` | `fetch-doc.sh` (text mode), `search.sh`, `build-index.sh build` |
+
+**Why both?** HTML→text conversion is lossy: tags are stripped and structure is gone. Once flattened to `.txt`, you can no longer tell which lines were headings — so `--toc` and `--section` can't work. Storing `.html` preserves the DOM structure needed for Python-based heading/section extraction.
+
+Storing `.txt` separately means every plain-text read (fetch, search, index build) is a direct `cat` or `grep` — no conversion cost at read time. The cost is paid once at fetch time via `fetch_and_cache`.
+
+**Do not store only `.html`** — every search and text read would pay the HTML→text conversion cost. **Do not store only `.txt`** — `--toc`, `--section`, and `info.sh` headings stop working.
+
+Use `fetch_and_cache <url> <safe_path>` (defined in `lib.sh`) for all doc fetches — it handles both files in a single HTTP request.
+
 ### Temp files
 
 Always clean up with `trap`. Use single quotes so the variable expands at exit time, not when the trap is registered:
