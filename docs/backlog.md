@@ -74,11 +74,13 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 ### Medium / Tech Debt
 
-#### BUG-10 — Single-line `sed` strips only single-line `<script>`/`<style>` tags
-- **File:** `scripts/lib.sh:41-42`
+#### BUG-10 — Fetched HTML is not cleaned before caching; noise bleeds into `.txt` and search
+- **Files:** `scripts/lib.sh` (`fetch_and_cache`, `fetch_text`)
 - **Status:** open
-- **Description:** The sed fallback HTML-to-text converter uses `sed 's/<script[^>]*>.*<\/script>//gI'`. Because `sed` processes one line at a time, multi-line script/style blocks (the norm in real HTML) are not stripped, leaving raw JavaScript and CSS in the `.txt` output.
-- **Fix:** Replace with a Python heredoc that uses `re.sub` with `re.S` flag, consistent with the section/toc extraction already in `fetch-doc.sh`.
+- **Description:** Raw HTML is stored as-is. `<script>`, `<style>`, and structural chrome (`<nav>`, `<header>`, `<footer>`) are never removed. Two downstream problems:
+  1. The `sed` fallback in `fetch_text` and `fetch_and_cache` processes HTML one line at a time, so multi-line `<script>`/`<style>` blocks (the norm) are not stripped — raw JS and CSS end up in `.txt`, polluting search and BM25 results.
+  2. Even with `lynx`/`w3m`, navigation and footer text is included in the `.txt`, adding irrelevant tokens to the search index.
+- **Fix:** In `fetch_and_cache`, add a Python cleaning step between the `curl` download and writing `doc_<safe>.html`. Use `html.parser` (stdlib, no new deps) to remove `<script>`, `<style>`, `<noscript>`, `<nav>`, `<header>`, and `<footer>` elements from the parsed DOM before saving. If `python3` is unavailable, store the raw HTML as-is (current behaviour — no regression). Because `.txt` is derived from the cleaned `.html`, both files benefit automatically. The output does not need to be W3C-valid — it only needs heading structure intact for `--toc`/`--section`.
 
 #### BUG-11 — `curl` exit code not checked after sitemap fetch in `build-index.sh`
 - **File:** `scripts/build-index.sh:20-25`
