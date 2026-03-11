@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — v0.2.4
+
+### Fixed
+
+- **BUG-15** (`snippets/common-configs.md`) — Model name `claude-sonnet-4-5` updated to `claude-sonnet-4-6` to match `SKILL.md`.
+- **BUG-17** (`recent.sh`, `build-index.sh`) — Remaining hardcoded `https://docs.openclaw.ai` URLs missed by the BUG-01 fix. `recent.sh` Python heredoc now receives `$DOCS_BASE_URL` via `sys.argv`. `build-index.sh` awk blocks use `-v base_url=`, grep/sed pipelines use `$DOCS_BASE_URL`. All produce correct output when `OPENCLAW_SAGE_DOCS_BASE_URL` is overridden.
+- **BUG-18** (`fetch-doc.sh`) — Removed local `fetch_and_cache()` that shadowed the shared `lib.sh` version. Replaced with a thin `_do_fetch` wrapper that calls the lib version and adds fetch-doc-specific error messages.
+- **BUG-19** (`search.sh`) — "Tip: For comprehensive ranked results..." diagnostic block was sent to stdout, polluting agent-parseable output. Redirected to stderr.
+- **BUG-20** (`build-index.sh`) — "Error: Could not get URL list from sitemap..." message was sent to stdout instead of stderr. Added `>&2`.
+- **I-1** (`build-index.sh`) — Bare redirection `> "$INDEX_FILE"` (ShellCheck SC2188) replaced with `: > "$INDEX_FILE"`.
+
+### Added
+
+- `tests/test_build_index.bats` — 2 new tests: BUG-20 stderr routing, BUG-17 URL override regression.
+- `tests/test_search.bats` — 1 new test: BUG-19 tip text not on stdout.
+- `tests/test_recent.bats` — 1 new test: BUG-17 URL override regression.
+- `tests/test_fetch_doc.bats` — 1 new test: BUG-18 no local fetch_and_cache shadow.
+
+---
+
 ## [0.2.3] 2026-03-10
 
 ### Fixed
