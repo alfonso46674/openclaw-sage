@@ -133,6 +133,70 @@ Grouped by effort. Items within each tier are ordered by agent value.
 - **Output:** Labelled source blocks with doc path, section heading, excerpt. JSON mode: `{"question", "sources": [{"path", "section", "excerpt", "url"}]}`
 - **Dependencies:** requires BM25 search + `fetch-doc.sh --section` to work correctly.
 
+#### ENH-20 — Parallel doc fetching in `build-index.sh fetch`
+- **Status:** proposed
+- **Description:** The fetch loop is strictly sequential: one HTTP request must complete before the next starts, plus a 0.3s courtesy sleep per request. With 100+ docs each taking 1–3 seconds, a cold cache takes 10–15 minutes. Parallelising with `xargs -P` brings this down to roughly `total_time / N` without adding any new dependencies.
+- **New env var:** `OPENCLAW_SAGE_FETCH_JOBS` (default `8`, set to `1` to restore sequential behaviour). Add to `lib.sh` alongside the other `OPENCLAW_SAGE_*` vars and document in `README.md`.
+- **Implementation notes:**
+
+  **1. Input preparation — null-delimited for cross-platform safety**
+  ```bash
+  # -d '\n' is GNU xargs only; -0 (null-delimited) works on both macOS BSD and Linux GNU xargs
+  URLS_NULL=$(printf '%s\0' $(echo "$URLS"))   # or: echo "$URLS" | tr '\n' '\0'
+  ```
+
+  **2. Marker directory for counting successful fetches**
+  Parallel subshells cannot update parent shell variables (`new`, `count`). Each worker touches a marker file on success; the parent counts them at the end.
+  ```bash
+  MARKER_DIR=$(mktemp -d)
+  trap 'rm -rf "$MARKER_DIR"' EXIT
+  ```
+
+  **3. The xargs worker — sources lib.sh inline, no new wrapper script**
+  ```bash
+  export OPENCLAW_SAGE_CACHE_DIR OPENCLAW_SAGE_DOCS_BASE_URL OPENCLAW_SAGE_DOC_TTL LIB_SH MARKER_DIR
+  echo "$URLS" | tr '\n' '\0' | xargs -0 -P "${OPENCLAW_SAGE_FETCH_JOBS:-8}" bash -c '
+    source "$LIB_SH"
+    url="$1"
+    [ -z "$url" ] && exit 0
+    safe=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||" | tr "/" "_")
+    cache_file="${CACHE_DIR}/doc_${safe}.txt"
+    if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
+      if fetch_and_cache "$url" "$safe"; then
+        touch "${MARKER_DIR}/${safe}"
+      fi
+      sleep 0.3
+    fi
+  ' --
+  new=$(ls "$MARKER_DIR" | wc -l)
+  ```
+  Key points:
+  - All `OPENCLAW_SAGE_*` vars and `LIB_SH`/`MARKER_DIR` must be `export`ed before the xargs call so subshells inherit them.
+  - The worker arg is `$1` (positional), not `{}` substitution — avoids shell injection if a URL ever contains special characters.
+  - `sleep 0.3` is per worker, so effective request rate is approximately `FETCH_JOBS / 0.3` req/s. At 8 workers that is ~26 req/s, which is polite. Consider exposing `OPENCLAW_SAGE_FETCH_DELAY` (default `0.3`) as a separate tunable.
+
+  **4. Progress display — drop the `\r` overwrite, print one line per completed doc**
+  The carriage-return trick only works when output is strictly sequential. With parallel workers, lines interleave and corrupt the display. Replace with a simple per-completion line:
+  ```bash
+  echo "  [done] $path" >&2
+  ```
+  Print the summary count only after `wait` / xargs returns:
+  ```bash
+  cached=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
+  echo "Done. $new new docs fetched, $cached total cached." >&2
+  ```
+
+  **5. Edge cases**
+  - `OPENCLAW_SAGE_FETCH_JOBS=0`: `xargs -P 0` is valid on GNU xargs (means "unlimited") but errors on BSD xargs. Guard with `[ "$FETCH_JOBS" -gt 0 ] || FETCH_JOBS=8`.
+  - `OPENCLAW_SAGE_FETCH_JOBS=1`: restores sequential behaviour; useful for debugging or very polite fetching.
+  - If `xargs -P` is unavailable (unlikely but theoretically possible in minimal environments), fall back to the existing sequential loop.
+
+  **6. Files to change**
+  - `scripts/lib.sh` — add `OPENCLAW_SAGE_FETCH_JOBS` and optionally `OPENCLAW_SAGE_FETCH_DELAY`.
+  - `scripts/build-index.sh` — replace the `while IFS= read` loop with the `xargs -P` block above.
+  - `README.md` — document the new env var in the environment variables table.
+  - `SKILL.md` — update `build-index.sh fetch` entry to mention parallelism and the env var.
+
 #### ENH-08 — Passage-level BM25 (chunked index)
 - **Status:** planned
 - **Description:** The current index scores whole documents. Split docs into overlapping ~10-line passages and index passages instead. Returns targeted excerpts rather than whole-doc scores. Critical for long docs.
