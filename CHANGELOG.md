@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **BUG-07** (`build-index.sh`, `lib.sh`) — `build-index.sh fetch` only wrote `.txt` files; the `.html` cache was never populated. Subsequent `--toc`/`--section` calls on bulk-fetched docs required a redundant network round-trip. Added a shared `fetch_and_cache <url> <safe_path>` helper to `lib.sh` that writes both `doc_<safe>.html` and `doc_<safe>.txt` in a single HTTP request. `build-index.sh fetch` now calls this helper instead of `fetch_text`.
+- **BUG-08** (`recent.sh`) — sitemap was only re-fetched when the file was absent (`[ ! -f ]`), ignoring `$SITEMAP_TTL`. A stale sitemap would be served indefinitely. Replaced with `! is_cache_fresh "$SITEMAP_XML" "$SITEMAP_TTL"` consistent with all other scripts.
+- **BUG-09** (`recent.sh`) — `$DAYS` argument had no validation; a non-numeric value like `recent.sh foo` would propagate to `find -mtime` (immediate error) and Python `int()` (unhandled exception) with no usage hint. Added `[[ "$DAYS" =~ ^[0-9]+$ ]]` guard after sourcing `lib.sh`, printing `Usage: recent.sh [days]` and exiting 1 on invalid input.
+
+### Added
+
+- `tests/test_recent.bats` — 7 tests covering BUG-08 (TTL-based sitemap refresh) and BUG-09 (argument validation).
+- `tests/test_build_index.bats` — 4 tests covering BUG-07 (`fetch_and_cache` dual-write regression).
+
+---
+
 ## [0.2.2] - 2026-03-09
 
 ### Fixed

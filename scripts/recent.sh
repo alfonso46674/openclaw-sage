@@ -4,10 +4,17 @@ DAYS=${1:-7}
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
+# BUG-09: validate $DAYS after lib.sh is sourced
+if ! [[ "$DAYS" =~ ^[0-9]+$ ]]; then
+  echo "Usage: recent.sh [days]" >&2
+  echo "  days must be a positive integer (default: 7)" >&2
+  exit 1
+fi
+
 SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
 
-# Fetch sitemap XML if not cached
-if [ ! -f "$SITEMAP_XML" ]; then
+# Fetch sitemap XML if not cached or stale (BUG-08: use TTL instead of existence check)
+if ! is_cache_fresh "$SITEMAP_XML" "$SITEMAP_TTL"; then
   if check_online; then
     echo "Fetching sitemap..." >&2
     curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null

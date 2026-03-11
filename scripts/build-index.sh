@@ -76,10 +76,8 @@ case "$1" in
       printf "\r  [%d/%d] %s          " "$count" "$total" "$path" >&2
 
       if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
-        fetch_text "$url" > "$cache_file"
-        if [ ! -s "$cache_file" ]; then
-          rm -f "$cache_file"
-        else
+        safe="$(echo "$path" | tr '/' '_')"
+        if fetch_and_cache "$url" "$safe"; then
           new=$((new + 1))
         fi
         sleep 0.3  # be polite to the server
