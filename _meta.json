@@ -1,6 +1,6 @@
 {
   "slug": "openclaw-sage",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "name": "openclaw-sage",
   "displayName": "OpenClaw Sage",
   "description": "OpenClaw documentation expert with decision tree navigation, search scripts, doc fetching, version tracking, and config snippets for all OpenClaw features.",

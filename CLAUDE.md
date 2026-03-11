@@ -14,7 +14,7 @@ openclaw-sage is an OpenClaw skill that gives AI agents access to OpenClaw docum
 
 ## Critical rules
 
-- **Always source `lib.sh`** — never redefine `is_cache_fresh`, `fetch_text`, `CACHE_DIR`, or `DOCS_BASE_URL` in a script.
+- **Always source `lib.sh`** — never redefine `is_cache_fresh`, `fetch_text`, `fetch_and_cache`, `CACHE_DIR`, or `DOCS_BASE_URL` in a script.
 - **Never hardcode** `~/.cache/...` or `https://docs.openclaw.ai` — use `$CACHE_DIR` and `$DOCS_BASE_URL`.
 - **Every `curl` call must write to `$CACHE_DIR`** — no uncached network requests.
 - **stdout is data, stderr is diagnostics** — progress/warning messages go to `>&2`.
