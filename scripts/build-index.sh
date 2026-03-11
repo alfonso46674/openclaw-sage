@@ -60,7 +60,7 @@ case "$1" in
     fi
 
     if [ -z "$URLS" ]; then
-      echo "Error: Could not get URL list from sitemap. Run ./scripts/sitemap.sh first."
+      echo "Error: Could not get URL list from sitemap. Run ./scripts/sitemap.sh first." >&2
       exit 1
     fi
 
