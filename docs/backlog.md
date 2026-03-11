@@ -1,6 +1,6 @@
 # openclaw-sage — Backlog
 
-Last audited: 2026-03-08
+Last audited: 2026-03-11
 
 This file tracks known bugs, tech debt, and planned enhancements. Any agent or developer picking up work here should read `docs/coding-conventions.md` first, then implement the item, update its status, and note the commit SHA.
 
@@ -42,6 +42,16 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Description:** When offline with a stale `.txt` cache but no `.html` cache, the script emits "Using stale cached content" on stderr and continues. The `toc`/`section` branches then fail with "run without --toc first" — which correctly states the symptom but hides the real cause (no HTML because the network is unreachable). The user/agent has no way to know this is an offline issue.
 - **Fix:** In the `toc`/`section` branches, before the "html required" exit, check whether `check_online` would fail and surface "Offline: HTML cache unavailable — fetch with network access first."
 
+#### BUG-17 — Additional hardcoded `docs.openclaw.ai` URLs missed by BUG-01 fix
+- **Files:** `scripts/recent.sh:47`, `scripts/build-index.sh:32,52,72`
+- **Status:** open
+- **Description:** Same class as BUG-01 but in different code paths not covered by the original fix:
+  1. `recent.sh:47` — Python heredoc has `path = loc.text.replace('https://docs.openclaw.ai/', '')` instead of using `$DOCS_BASE_URL` passed via `sys.argv`.
+  2. `build-index.sh:32,52` — awk language detection blocks use literal `sub(/https:\/\/docs\.openclaw\.ai\//, "", path)` instead of `-v base_url="$DOCS_BASE_URL"`.
+  3. `build-index.sh:72` — sed path extraction uses literal `sed 's|https://docs\.openclaw\.ai/||'` instead of `sed "s|${DOCS_BASE_URL}/||"`.
+  All produce wrong output when `$DOCS_BASE_URL` is overridden.
+- **Fix:** Pass `$DOCS_BASE_URL` into each context: as `sys.argv` for the Python block, as `-v base_url=` for awk, and as a variable in the double-quoted sed.
+
 ---
 
 ### Important
@@ -70,10 +80,6 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Description:** `DAYS=${1:-7}` is captured before `lib.sh` is sourced, with no integer validation. A non-numeric argument like `recent.sh foo` is passed to `find -mtime` (immediate error) and Python `int()` (unhandled exception), with no usage message shown to the user.
 - **Fix:** After sourcing `lib.sh`, validate `$DAYS` with `[[ "$DAYS" =~ ^[0-9]+$ ]]` and print usage + exit 1 if invalid. Add a `Usage: recent.sh [days]` line.
 
----
-
-### Medium / Tech Debt
-
 #### BUG-10 — Fetched HTML is not cleaned before caching; noise bleeds into `.txt` and search
 - **Files:** `scripts/lib.sh` (`fetch_and_cache`, `fetch_text`)
 - **Status:** open
@@ -81,6 +87,34 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
   1. The `sed` fallback in `fetch_text` and `fetch_and_cache` processes HTML one line at a time, so multi-line `<script>`/`<style>` blocks (the norm) are not stripped — raw JS and CSS end up in `.txt`, polluting search and BM25 results.
   2. Even with `lynx`/`w3m`, navigation and footer text is included in the `.txt`, adding irrelevant tokens to the search index.
 - **Fix:** In `fetch_and_cache`, add a Python cleaning step between the `curl` download and writing `doc_<safe>.html`. Use `html.parser` (stdlib, no new deps) to remove `<script>`, `<style>`, `<noscript>`, `<nav>`, `<header>`, and `<footer>` elements from the parsed DOM before saving. If `python3` is unavailable, store the raw HTML as-is (current behaviour — no regression). Because `.txt` is derived from the cleaned `.html`, both files benefit automatically. The output does not need to be W3C-valid — it only needs heading structure intact for `--toc`/`--section`.
+
+#### BUG-15 — `snippets/common-configs.md` references outdated model name
+- **File:** `snippets/common-configs.md`
+- **Status:** open
+- **Description:** Line 105 uses `"anthropic/claude-sonnet-4-5"` while `SKILL.md` references `"anthropic/claude-sonnet-4-6"`. Both documents should reference the same current model.
+- **Fix:** Update `snippets/common-configs.md` to use `claude-sonnet-4-6`.
+
+#### BUG-18 — `fetch-doc.sh` local `fetch_and_cache` duplicates the `lib.sh` shared version
+- **File:** `scripts/fetch-doc.sh:39-69`
+- **Status:** open
+- **Description:** `fetch-doc.sh` defines its own `fetch_and_cache()` (lines 39–69) that is nearly identical to the shared version added to `lib.sh` during the BUG-07 fix. The local version references outer-scope variables (`$URL`, `$HTML_CACHE`, `$CACHE_FILE`) instead of accepting arguments. Two functions with the same name in the same call chain is confusing and risks silent shadowing if `lib.sh`'s version is expected.
+- **Fix:** Remove the local `fetch_and_cache` definition. Call the `lib.sh` version: `fetch_and_cache "$URL" "$SAFE_PATH"`. The existing error messages ("Failed to fetch", "Empty response") should move to the caller since the lib version is intentionally generic.
+
+#### BUG-19 — `search.sh` sends diagnostic text to stdout
+- **File:** `scripts/search.sh:181-183`
+- **Status:** open
+- **Description:** The "Tip: For comprehensive ranked results..." lines are always printed to stdout even when results were found. Agents parsing stdout receive unexpected non-result text. Violates the "stdout is data, stderr is diagnostics" convention.
+- **Fix:** Redirect the "Tip:" block to `>&2`, or omit it entirely when results were found (only print as guidance when `found=0`).
+
+#### BUG-20 — `build-index.sh` error message goes to stdout instead of stderr
+- **File:** `scripts/build-index.sh:63`
+- **Status:** open
+- **Description:** `echo "Error: Could not get URL list from sitemap..."` is written to stdout. Should go to stderr per output conventions.
+- **Fix:** Add `>&2` to the echo.
+
+---
+
+### Medium / Tech Debt
 
 #### BUG-11 — `curl` exit code not checked after sitemap fetch in `build-index.sh`
 - **File:** `scripts/build-index.sh:20-25`
@@ -112,23 +146,17 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Description:** The fetch progress line uses `printf "\r  [%d/%d] %s          "` with a fixed number of trailing spaces. When a shorter path follows a longer one, the carriage return moves the cursor to column 0 but the spaces don't fully overwrite the leftover characters, leaving garbage visible (e.g., `zh-CN                         s          ubleshooting`). Cosmetic only — fetching is correct.
 - **Fix:** Pad the path field to a fixed width using `printf "\r  [%d/%d] %-40s" "$count" "$total" "$path"` so the column is always fully overwritten, or truncate long paths to a maximum width with a trailing `…`.
 
-#### BUG-15 — `snippets/common-configs.md` references outdated model name
-- **File:** `snippets/common-configs.md`
-- **Status:** open
-- **Description:** Line 105 uses `"anthropic/claude-sonnet-4-5"` while `SKILL.md` references `"anthropic/claude-sonnet-4-6"`. Both documents should reference the same current model.
-- **Fix:** Update `snippets/common-configs.md` to use `claude-sonnet-4-6`.
-
 ---
 
 ## Enhancements
 
-Grouped by effort. Items within each tier are ordered by agent value.
+Grouped by effort and value. Items within each tier are ordered by agent/user value (highest first).
 
-### Tier 3 (planned — not yet started)
+### Tier 2 (high value — next up after critical bugs)
 
 #### ENH-07 — `ask.sh <question>` — one-shot answer tool
 - **Status:** planned
-- **Description:** Combines search + fetch into a single call. BM25-searches the question, fetches the top 2-3 relevant doc sections, and returns sources + concatenated excerpts. Eliminates the search → read → decide → fetch → read agent loop.
+- **Description:** Combines search + fetch into a single call. BM25-searches the question, fetches the top 2-3 relevant doc sections, and returns sources + concatenated excerpts. Eliminates the search → read → decide → fetch → read agent loop. **Highest-value enhancement — transforms the skill from "doc access" to "doc expert."**
 - **Inputs:** `<question text...>` (multi-word, no quotes needed), `[--json]`, `[--max-sections N]`
 - **Output:** Labelled source blocks with doc path, section heading, excerpt. JSON mode: `{"question", "sources": [{"path", "section", "excerpt", "url"}]}`
 - **Dependencies:** requires BM25 search + `fetch-doc.sh --section` to work correctly.
@@ -197,19 +225,71 @@ Grouped by effort. Items within each tier are ordered by agent value.
   - `README.md` — document the new env var in the environment variables table.
   - `SKILL.md` — update `build-index.sh fetch` entry to mention parallelism and the env var.
 
+---
+
+### Tier 3 (significant effort — planned)
+
+#### ENH-19 — Content-change tracking (page-level diffing)
+- **Status:** proposed
+- **Description:** `track-changes.sh` tracks structural changes (pages added/removed from sitemap). It cannot detect when an existing page's *content* changes. This enhancement adds content-change awareness by storing a checksum for each cached doc and comparing on re-fetch.
+- **Context:** docs.openclaw.ai is a **living single-version** documentation site (confirmed by research — no versioned URLs, no version metadata in HTML, no changelog page). There is no concept of "docs for v1.0 vs v2.0". Content evolves continuously and is only distinguishable via timestamps and checksums.
+- **Implementation notes:**
+  - On each doc fetch (in `fetch_and_cache` / `build-index.sh fetch`), compute `sha256sum doc_<path>.txt` and store to `doc_<path>.sha256` in `$CACHE_DIR`.
+  - Before overwriting the `.txt`, compare the new checksum against the stored one.
+  - `build-index.sh fetch` or a new `cache.sh diff-content` subcommand can report which docs changed content since last fetch.
+  - Output format: `[changed] gateway/configuration`, `[unchanged] providers/discord`, `[new] automation/webhook`.
+- **Agent value:** Allows an agent to run `build-index.sh fetch` and immediately know which specific docs have been updated — not just which pages exist. Useful for "what changed in the docs since I last checked?" workflows.
+
 #### ENH-08 — Passage-level BM25 (chunked index)
 - **Status:** planned
 - **Description:** The current index scores whole documents. Split docs into overlapping ~10-line passages and index passages instead. Returns targeted excerpts rather than whole-doc scores. Critical for long docs.
 - **Implementation notes:** `build-index.sh build` generates passages in `index.txt` (format: `path:chunk_id|passage_text`). `bm25_search.py` scores and returns `path:chunk_id` with passage excerpt. `search.sh` resolves chunk line offsets back to path.
 
+#### ENH-21 — Config validation tool (`validate-config.sh`)
+- **Status:** proposed
+- **Description:** A `validate-config.sh <config.json>` command that checks a user's OpenClaw configuration against known schema requirements extracted from the docs. "Is my config correct?" is one of the most common support questions for any platform. The skill already contains config snippets — this extends them into a validation tool.
+- **Implementation notes:**
+  - Accept a JSON file path as input.
+  - Use Python to parse the JSON and validate against a schema derived from `snippets/common-configs.md` and the gateway/configuration doc.
+  - Check: required fields present, correct types, known provider names, valid model format, port ranges, etc.
+  - Output: list of issues found, or "Config is valid" on success. JSON mode: `{"valid": true/false, "issues": [{"field": "...", "message": "..."}]}`.
+  - The schema definition could live in `snippets/config-schema.json` or be derived from the docs at runtime.
+- **Limitation:** Schema will lag behind docs.openclaw.ai unless manually maintained. Consider generating it from the fetched configuration doc.
+
+#### ENH-22 — Offline-first background refresh (`auto-refresh`)
+- **Status:** proposed
+- **Description:** A cron-compatible background refresh mode that periodically updates the cache so the skill is always ready. Currently the cache is populated on-demand, meaning the first request after a cold cache or TTL expiry incurs a network wait. A `build-index.sh auto-refresh` (or a dedicated `auto-refresh.sh`) subcommand would: re-fetch stale docs, rebuild the index if any docs changed, and exit. Designed to be run via system cron or agent cron jobs.
+- **Implementation notes:**
+  - Reuse `build-index.sh fetch` logic but only re-fetch docs whose TTL has expired (already does this).
+  - After fetch, if any docs were updated, automatically run `build-index.sh build`.
+  - Output a summary: `Auto-refresh complete: 3 docs updated, index rebuilt.` or `Auto-refresh complete: all docs fresh, no changes.`
+  - Provide a sample crontab entry in the README: `0 */6 * * * /path/to/build-index.sh auto-refresh`.
+- **Agent value:** Persistent agents (long-running sessions, CI-integrated agents) always have a warm, current cache. Eliminates the "first query is slow" problem.
+
+#### ENH-23 — Doc version awareness (builds on ENH-19)
+- **Status:** proposed
+- **Description:** Building on ENH-19's checksum storage, add the ability to answer "what changed in the docs between two points in time?" Currently `track-changes.sh` only tracks structural changes (pages added/removed). This enhancement stores checksums over time and can diff content changes between any two fetches.
+- **Implementation notes:**
+  - Store checksums with timestamps: `doc_<path>.sha256` contains `<sha256> <ISO8601_timestamp>` per line (append-only log).
+  - A `track-changes.sh content-diff <date1> [date2]` subcommand finds checksums closest to each date and reports which docs changed.
+  - Output format: `[changed] gateway/configuration (2 revisions since 2026-03-01)`, `[stable] providers/discord`.
+  - Optional: store the old `.txt` before overwriting so the actual text diff can be shown.
+- **Dependencies:** ENH-19 (checksum infrastructure).
+
 ---
 
-### Tier 4 (new — proposed from 2026-03-08 audit)
+### Tier 4 (small effort — proposed)
 
 #### ENH-09 — `search.sh --max-results N`
 - **Status:** proposed
 - **Description:** BM25 caps results at 20 internally but exposes no CLI control. Agents doing narrow queries want top-3; broad exploration queries want more. Simple one-line addition.
 - **Implementation notes:** Pass `N` as a fourth argument to `bm25_search.py search` and slice the results list. Default `N=10`.
+
+#### ENH-18 — `prefetch.sh <topic>`
+- **Status:** proposed
+- **Description:** Search for a topic, then bulk-fetch the top N results in one call. Warms the cache for an entire subject area without requiring the agent to orchestrate search → loop → fetch.
+- **Example:** `prefetch.sh webhook retry --top 5`
+- **Dependencies:** Requires BUG-07 fix (done) so fetched docs populate the HTML cache too.
 
 #### ENH-10 — `fetch-doc.sh --grep <pattern>`
 - **Status:** proposed
@@ -221,11 +301,6 @@ Grouped by effort. Items within each tier are ordered by agent value.
 - **Status:** proposed
 - **Description:** Accept multiple paths and return metadata for all at once. Agents evaluating several candidate docs before fetching benefit from one call instead of N sequential calls.
 - **Implementation notes:** Loop existing info logic over all positional args. JSON mode: return a JSON array. Human mode: print one block per doc separated by `---`.
-
-#### ENH-12 — `cache pin <path>` / `cache unpin <path>`
-- **Status:** proposed
-- **Description:** Pin specific docs to prevent TTL-based eviction. Pinned docs are never considered stale by `is_cache_fresh`. Useful when an agent is actively working with a specific integration's docs across a long session.
-- **Implementation notes:** Write pinned paths to `$CACHE_DIR/pinned.txt` (one path per line). Modify `is_cache_fresh` to check this file and return 0 (fresh) unconditionally for pinned paths.
 
 #### ENH-13 — `fetch-doc.sh --format json`
 - **Status:** proposed
@@ -242,6 +317,24 @@ Grouped by effort. Items within each tier are ordered by agent value.
 - **Description:** `build-index.sh build` always rebuilds `index.txt` from scratch. For large corpora, a delta build that only reprocesses `.txt` files newer than `index.txt` would be significantly faster.
 - **Implementation notes:** Compare `stat` mtime of each `doc_*.txt` against `index.txt`. Only rewrite changed doc's lines in `index.txt`. Rebuild `index_meta.json` after any change.
 
+#### ENH-24 — Semantic search / synonym expansion
+- **Status:** proposed
+- **Description:** BM25 is keyword-based. A user asking "how do I handle rate limiting" won't match docs using "retry" and "maxAttempts" but never the words "rate limiting." A lightweight synonym/expansion table would improve search recall without adding heavy dependencies.
+- **Implementation notes:**
+  - Create a `synonyms.txt` file mapping common terms: `rate limiting → retry, maxAttempts, throttle`, `auth → authentication, token, credentials`, etc.
+  - At search time, expand the query terms using the synonym table before running BM25.
+  - Keep the table small and manually curated (domain-specific synonyms, not a general thesaurus).
+  - Full embeddings-based search would be a Tier 2 effort requiring an external model — this is the lightweight alternative.
+
+---
+
+### Tier 5 (deprioritized — low value or niche)
+
+#### ENH-12 — `cache pin <path>` / `cache unpin <path>`
+- **Status:** proposed
+- **Description:** Pin specific docs to prevent TTL-based eviction. Pinned docs are never considered stale by `is_cache_fresh`. Useful when an agent is actively working with a specific integration's docs across a long session.
+- **Implementation notes:** Write pinned paths to `$CACHE_DIR/pinned.txt` (one path per line). Modify `is_cache_fresh` to check this file and return 0 (fresh) unconditionally for pinned paths.
+
 #### ENH-16 — `get_mtime` helper in `lib.sh` (supports BUG-14 fix)
 - **Status:** proposed
 - **Description:** Expose the raw epoch mtime integer from `lib.sh` so scripts can format timestamps without re-implementing the OS detection branch. Resolves the three-way duplication in BUG-14.
@@ -252,34 +345,22 @@ Grouped by effort. Items within each tier are ordered by agent value.
 - **Description:** Append each `search.sh` query to `$CACHE_DIR/query_history.log` (format: `<ISO8601_timestamp> <query>`). Useful for debugging what agents searched, and as future input for BM25 parameter tuning.
 - **Implementation notes:** Single `printf '%s %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$KEYWORD" >> "$QUERY_LOG"` in `search.sh`. No new dependencies.
 
-#### ENH-19 — Content-change tracking (page-level diffing)
-- **Status:** proposed
-- **Description:** `track-changes.sh` tracks structural changes (pages added/removed from sitemap). It cannot detect when an existing page's *content* changes. This enhancement adds content-change awareness by storing a checksum for each cached doc and comparing on re-fetch.
-- **Context:** docs.openclaw.ai is a **living single-version** documentation site (confirmed by research — no versioned URLs, no version metadata in HTML, no changelog page). There is no concept of "docs for v1.0 vs v2.0". Content evolves continuously and is only distinguishable via timestamps and checksums.
-- **Implementation notes:**
-  - On each doc fetch (in `fetch_and_cache` / `build-index.sh fetch`), compute `sha256sum doc_<path>.txt` and store to `doc_<path>.sha256` in `$CACHE_DIR`.
-  - Before overwriting the `.txt`, compare the new checksum against the stored one.
-  - `build-index.sh fetch` or a new `cache.sh diff-content` subcommand can report which docs changed content since last fetch.
-  - Output format: `[changed] gateway/configuration`, `[unchanged] providers/discord`, `[new] automation/webhook`.
-- **Agent value:** Allows an agent to run `build-index.sh fetch` and immediately know which specific docs have been updated — not just which pages exist. Useful for "what changed in the docs since I last checked?" workflows.
-
-#### ENH-18 — `prefetch.sh <topic>`
-- **Status:** proposed
-- **Description:** Search for a topic, then bulk-fetch the top N results in one call. Warms the cache for an entire subject area without requiring the agent to orchestrate search → loop → fetch.
-- **Example:** `prefetch.sh webhook retry --top 5`
-- **Dependencies:** Requires BUG-07 fix so fetched docs populate the HTML cache too.
-
 ---
 
 ## Test Coverage Gaps
 
-The following scripts have no bats tests. Adding coverage for at least the offline fallback paths would prevent regressions.
-
-| Script | Priority | Key scenarios to cover |
-|--------|----------|----------------------|
-| `scripts/sitemap.sh` | ~~High~~ | covered by `tests/test_sitemap.bats` |
-| `scripts/recent.sh` | Medium | no-sitemap path, `$DAYS` validation, `--json` output |
-| `scripts/track-changes.sh` | ~~Medium~~ | covered by `tests/test_track_changes.bats` |
+| Script | Test File | Priority | Key gaps |
+|--------|-----------|----------|----------|
+| `scripts/build-index.sh` | `test_build_index.bats` (4) | **High** | `build` and `search` subcommands untested (80+ lines). Only `status` and `fetch_and_cache` covered. |
+| `scripts/search.sh` | `test_search.bats` (11) | **Medium** | BM25-ranked path not tested (requires seeded index). `OPENCLAW_SAGE_OUTPUT=json` not tested for search. |
+| `scripts/lib.sh` | `test_lib.bats` (11) | **Medium** | `fetch_text` not tested. `check_online` not tested. `fetch_and_cache` only tested via `test_build_index.bats` with file:// URLs. |
+| `scripts/info.sh` | `test_info.bats` (9) | **Medium** | `python3` unavailable fallback not tested. HTML backfill path not tested. |
+| `scripts/recent.sh` | `test_recent.bats` (7) | **Low** | `find -mtime` section not tested with seeded docs. |
+| `scripts/sitemap.sh` | `test_sitemap.bats` (8) | **Low** | Offline fallback with stale cache. JSON error when python3 missing. |
+| `scripts/fetch-doc.sh` | `test_fetch_doc.bats` (11) | **Low** | Offline fallback with stale `.txt` cache. `--max-lines 0` edge case. |
+| `scripts/cache.sh` | `test_cache.bats` (12) | -- | Good coverage. |
+| `scripts/track-changes.sh` | `test_track_changes.bats` (11) | -- | Good coverage. |
+| `scripts/bm25_search.py` | `test_bm25.py` (24) | -- | Good coverage. |
 
 ---
 
