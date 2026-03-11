@@ -54,19 +54,19 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-07 — `build-index.sh fetch` never populates the HTML cache
 - **File:** `scripts/build-index.sh:79`
-- **Status:** in_progress — fix/bug-07-08-09
+- **Status:** done — 5714ca0
 - **Description:** Uses `fetch_text "$url" > "$cache_file"` which writes only the `.txt` file. The `.html` file is never created. Subsequent calls to `info.sh`, `fetch-doc.sh --toc`, or `fetch-doc.sh --section` on bulk-fetched docs will trigger a second network round-trip to backfill HTML, or fail entirely if offline.
 - **Fix:** Mirror the dual-write pattern from `fetch-doc.sh`: fetch raw HTML to `doc_<safe>.html` first, then convert to `doc_<safe>.txt`. Centralise this into a shared `fetch_and_cache <url> <safe_path>` function in `lib.sh`.
 
 #### BUG-08 — `recent.sh` uses file-existence check instead of TTL for sitemap
 - **File:** `scripts/recent.sh:10`
-- **Status:** in_progress — fix/bug-07-08-09
+- **Status:** done — 5714ca0
 - **Description:** `if [ ! -f "$SITEMAP_XML" ]` only fetches if the file is completely absent. A stale-but-existing sitemap is served without re-validation. Every other script uses `is_cache_fresh "$SITEMAP_XML" "$SITEMAP_TTL"`.
 - **Fix:** Replace the existence check with `if ! is_cache_fresh "$SITEMAP_XML" "$SITEMAP_TTL"`.
 
 #### BUG-09 — `recent.sh` does not validate `$DAYS` argument
 - **File:** `scripts/recent.sh:3`
-- **Status:** in_progress — fix/bug-07-08-09
+- **Status:** done — 5714ca0
 - **Description:** `DAYS=${1:-7}` is captured before `lib.sh` is sourced, with no integer validation. A non-numeric argument like `recent.sh foo` is passed to `find -mtime` (immediate error) and Python `int()` (unhandled exception), with no usage message shown to the user.
 - **Fix:** After sourcing `lib.sh`, validate `$DAYS` with `[[ "$DAYS" =~ ^[0-9]+$ ]]` and print usage + exit 1 if invalid. Add a `Usage: recent.sh [days]` line.
 
