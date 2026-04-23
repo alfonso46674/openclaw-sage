@@ -10,6 +10,9 @@ setup() {
   export TEST_CACHE
   TEST_CACHE="$(mktemp -d)"
   export OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE"
+  export TEST_BIN
+  TEST_BIN="$TEST_CACHE/bin"
+  mkdir -p "$TEST_BIN"
   # Seed a local HTML file — used as a file:// URL so no HTTP server is needed
   echo "<html><body><h1>Hello</h1><p>World</p></body></html>" > "$TEST_CACHE/fixture.html"
 }
@@ -72,6 +75,127 @@ XML
   grep -q "Error: Could not get URL list" "$stderr_file"
   # Error should NOT be in stdout
   ! grep -q "Error: Could not get URL list" "$stdout_file"
+}
+
+# ---------------------------------------------------------------------------
+# BUG-11 — sitemap fetch failures should be reported directly
+# ---------------------------------------------------------------------------
+
+@test "BUG-11: fetch stops with sitemap fetch error when sitemap curl fails" {
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+for arg in "$@"; do
+  if [ "$arg" = "-I" ]; then
+    exit 0
+  fi
+done
+exit 7
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Error: failed to fetch sitemap"* ]]
+  [[ "$output" != *"Error: Could not get URL list from sitemap"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# BUG-12 — build must stop if build-meta fails
+# ---------------------------------------------------------------------------
+
+@test "BUG-12: build stops with error when build-meta fails" {
+  echo "searchterm in doc content" > "$TEST_CACHE/doc_test_page.txt"
+
+  cat > "$TEST_BIN/python3" <<'EOF'
+#!/bin/bash
+if [ "$2" = "build-meta" ]; then
+  exit 9
+fi
+exec /usr/bin/env python3 "$@"
+EOF
+  chmod +x "$TEST_BIN/python3"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    "$BUILD_INDEX_SH" build
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Error: build-meta failed"* ]]
+  [[ "$output" != *"Location:"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# BUG-16 — progress rendering should fully overwrite prior paths
+# ---------------------------------------------------------------------------
+
+@test "BUG-16: fetch progress does not leave suffix garbage when a shorter path follows a longer one" {
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/providers/very-long-provider-name/troubleshooting</loc></url>
+  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
+</urlset>
+XML
+
+  echo "cached content" > "$TEST_CACHE/doc_providers_very-long-provider-name_troubleshooting.txt"
+  echo "cached content" > "$TEST_CACHE/doc_providers_discord.txt"
+
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+for arg in "$@"; do
+  if [ "$arg" = "-I" ]; then
+    exit 0
+  fi
+done
+exit 7
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 0 ]
+
+  local rendered
+  rendered="$(python3 - "$output" <<'PYEOF'
+import sys
+text = sys.argv[1]
+lines = []
+line = []
+cursor = 0
+
+for ch in text:
+    if ch == '\r':
+        cursor = 0
+    elif ch == '\n':
+        lines.append(''.join(line))
+        line = []
+        cursor = 0
+    else:
+        if cursor >= len(line):
+            line.extend(' ' * (cursor - len(line) + 1))
+        line[cursor] = ch
+        cursor += 1
+
+if line:
+    lines.append(''.join(line))
+
+print('\n'.join(lines))
+PYEOF
+)"
+
+  [[ "$rendered" == *"[2/2] providers/discord"* ]]
+  [[ "$rendered" != *"providers/discord"*troubleshooting* ]]
 }
 
 # ---------------------------------------------------------------------------

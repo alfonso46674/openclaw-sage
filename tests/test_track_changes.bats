@@ -13,6 +13,9 @@ setup() {
   export TEST_CACHE
   TEST_CACHE="$(mktemp -d)"
   export OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE"
+  export TEST_BIN
+  TEST_BIN="$TEST_CACHE/bin"
+  mkdir -p "$TEST_BIN"
   mkdir -p "$TEST_CACHE/snapshots"
 }
 
@@ -57,6 +60,14 @@ _seed_snapshot() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"2026-01-01"* ]]
   [[ "$output" == *"2026-02-01"* ]]
+}
+
+@test "list: shows snapshots in chronological order" {
+  _seed_snapshot "20260201_130000" "providers/telegram"
+  _seed_snapshot "20260101_120000" "providers/discord"
+  run "$TRACK_SH" list
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ 2026-01-01[[:print:][:space:]]*2026-02-01 ]]
 }
 
 @test "list: shows page count for each snapshot" {
@@ -136,6 +147,38 @@ _seed_snapshot() {
                '$TRACK_SH' since 2026-01-01 2>&1"
   [ "$status" -eq 1 ]
   [[ "$output" == *"Offline"* ]]
+}
+
+@test "since: uses oldest snapshot when the requested date predates all snapshots" {
+  _seed_snapshot "20260101_000000" "providers/discord"
+  _seed_snapshot "20260201_000000" "providers/discord" "providers/telegram"
+
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
+  <url><loc>https://docs.openclaw.ai/providers/telegram</loc></url>
+</urlset>
+XML
+
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+for arg in "$@"; do
+  if [ "$arg" = "-I" ]; then
+    exit 0
+  fi
+done
+exit 7
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_SITEMAP_TTL=999999 \
+    "$TRACK_SH" since 2025-01-01
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"oldest snapshot (20260101_000000)"* ]]
+  [[ "$output" == *"+ providers/telegram"* ]]
 }
 
 # --- snapshot ---

@@ -19,7 +19,10 @@ case "$1" in
     # Ensure sitemap XML is available
     if [ ! -f "$SITEMAP_XML" ]; then
       echo "Fetching sitemap first..." >&2
-      curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+      if ! curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
+        echo "Error: failed to fetch sitemap (network unreachable?)" >&2
+        exit 1
+      fi
     fi
 
     ALL_URLS=$(grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" 2>/dev/null | sed 's/<[^>]*>//g' | grep "${DOCS_BASE_URL}/" | grep -v "^${DOCS_BASE_URL}/$")
@@ -65,6 +68,14 @@ case "$1" in
     fi
 
     total=$(echo "$URLS" | wc -l)
+    max_path_width=$(echo "$URLS" | awk -v base_url="$DOCS_BASE_URL/" '
+      {
+        path = $0
+        sub("^" base_url, "", path)
+        if (length(path) > max) max = length(path)
+      }
+      END { print max + 0 }
+    ')
     count=0
     new=0
 
@@ -73,7 +84,7 @@ case "$1" in
       [ -z "$path" ] && continue
       cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
       count=$((count + 1))
-      printf "\r  [%d/%d] %s          " "$count" "$total" "$path" >&2
+      printf "\r  [%d/%d] %-*s" "$count" "$total" "$max_path_width" "$path" >&2
 
       if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
         safe="$(echo "$path" | tr '/' '_')"
@@ -112,7 +123,10 @@ case "$1" in
 
     if command -v python3 &>/dev/null; then
       echo "Building BM25 meta..." >&2
-      python3 "$SCRIPT_DIR/bm25_search.py" build-meta "$INDEX_FILE"
+      python3 "$SCRIPT_DIR/bm25_search.py" build-meta "$INDEX_FILE" || {
+        echo "Error: build-meta failed" >&2
+        exit 1
+      }
     fi
 
     echo "Location: $INDEX_FILE"

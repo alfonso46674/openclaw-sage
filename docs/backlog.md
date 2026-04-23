@@ -118,31 +118,31 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-11 — `curl` exit code not checked after sitemap fetch in `build-index.sh`
 - **File:** `scripts/build-index.sh:20-25`
-- **Status:** open
+- **Status:** done — 02b02bf
 - **Description:** `curl -sf ... -o "$SITEMAP_XML"` failure is silently ignored. If the fetch fails, `grep` on an empty/absent file produces no output, and the subsequent "Could not get URL list from sitemap. Run sitemap.sh first" message blames the wrong thing.
 - **Fix:** Check `$?` after the curl call and emit "Error: failed to fetch sitemap (network unreachable?)" with exit 1.
 
 #### BUG-12 — `build-index.sh build` does not check `build-meta` exit code
 - **File:** `scripts/build-index.sh:117`
-- **Status:** open
+- **Status:** done — f7a37b7
 - **Description:** `python3 ... build-meta ...` failure (e.g. disk full writing `index_meta.json`) is not detected. The script continues and prints "Location: $INDEX_FILE" implying success.
 - **Fix:** Add `|| { echo "Error: build-meta failed" >&2; exit 1; }` after the python3 call.
 
 #### BUG-13 — `for f in $(ls ... | sort)` anti-pattern in `track-changes.sh`
 - **File:** `scripts/track-changes.sh:49,75`
-- **Status:** open
+- **Status:** done — 5666878
 - **Description:** Parsing `ls` output is fragile and unnecessary. Snapshot filenames are always `YYYYMMDD_HHMMSS.txt` so glob sorts correctly.
 - **Fix:** Replace `for f in $(ls "$SNAPSHOTS_DIR"/*.txt | sort)` with `for f in "$SNAPSHOTS_DIR"/*.txt`.
 
 #### BUG-14 — Mtime OS detection logic duplicated across three files
 - **Files:** `scripts/lib.sh:20-25`, `scripts/cache.sh:12-17`, `scripts/info.sh:124-126`
-- **Status:** open
+- **Status:** done — 76c29ca
 - **Description:** The macOS (`stat -f %m`) vs Linux (`stat -c %Y`) branch is copy-pasted in three places. The canonical version is in `lib.sh`; the others exist because they need the raw mtime integer for display (not just a freshness boolean). `is_cache_fresh` doesn't expose the value.
 - **Fix:** Add a `get_mtime <file>` helper to `lib.sh` that returns the epoch integer. Call it from all three sites.
 
 #### BUG-16 — Progress display garbles when a shorter path follows a longer one
 - **File:** `scripts/build-index.sh:76`
-- **Status:** open
+- **Status:** done — 81fc8f4
 - **Description:** The fetch progress line uses `printf "\r  [%d/%d] %s          "` with a fixed number of trailing spaces. When a shorter path follows a longer one, the carriage return moves the cursor to column 0 but the spaces don't fully overwrite the leftover characters, leaving garbage visible (e.g., `zh-CN                         s          ubleshooting`). Cosmetic only — fetching is correct.
 - **Fix:** Pad the path field to a fixed width using `printf "\r  [%d/%d] %-40s" "$count" "$total" "$path"` so the column is always fully overwritten, or truncate long paths to a maximum width with a trailing `…`.
 
@@ -370,7 +370,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Implementation notes:** Write pinned paths to `$CACHE_DIR/pinned.txt` (one path per line). Modify `is_cache_fresh` to check this file and return 0 (fresh) unconditionally for pinned paths.
 
 #### ENH-16 — `get_mtime` helper in `lib.sh` (supports BUG-14 fix)
-- **Status:** proposed
+- **Status:** done — 76c29ca
 - **Description:** Expose the raw epoch mtime integer from `lib.sh` so scripts can format timestamps without re-implementing the OS detection branch. Resolves the three-way duplication in BUG-14.
 - **Implementation notes:** `get_mtime <file>` → prints integer epoch to stdout. Returns 1 if file does not exist.
 

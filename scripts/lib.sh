@@ -15,17 +15,24 @@ check_online() {
   curl -sf --max-time 2 -o /dev/null -I "$DOCS_BASE_URL" 2>/dev/null
 }
 
+# get_mtime <file> — print file mtime as epoch seconds
+get_mtime() {
+  local file="$1"
+  [ -f "$file" ] || return 1
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    stat -f %m "$file"
+  else
+    stat -c %Y "$file"
+  fi
+}
+
 # is_cache_fresh <file> <ttl_seconds>
 is_cache_fresh() {
   local file="$1" ttl="$2"
   [ -f "$file" ] || return 1
   local now mtime
   now=$(date +%s)
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    mtime=$(stat -f %m "$file")
-  else
-    mtime=$(stat -c %Y "$file")
-  fi
+  mtime=$(get_mtime "$file") || return 1
   [ $((now - mtime)) -lt "$ttl" ]
 }
 

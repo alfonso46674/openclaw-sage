@@ -54,9 +54,10 @@ case "$1" in
       echo "Run: ./scripts/track-changes.sh snapshot"
       exit 0
     fi
+    snapshot_files=("$SNAPSHOTS_DIR"/*.txt)
     echo "Available snapshots:"
     echo ""
-    for f in $(ls "$SNAPSHOTS_DIR"/*.txt | sort); do
+    for f in "${snapshot_files[@]}"; do
       name=$(basename "$f" .txt)
       count=$(wc -l < "$f")
       # Format timestamp: 20260101_123456 → 2026-01-01 12:34:56
@@ -82,7 +83,8 @@ case "$1" in
 
     # Find the most recent snapshot before the given date
     BEFORE_SNAP=""
-    for f in $(ls "$SNAPSHOTS_DIR"/*.txt | sort); do
+    snapshot_files=("$SNAPSHOTS_DIR"/*.txt)
+    for f in "${snapshot_files[@]}"; do
       name=$(basename "$f" .txt)
       snap_date="${name%%_*}"
       if [ "$snap_date" -lt "$DATE_FILTER" ] 2>/dev/null; then
@@ -103,7 +105,7 @@ case "$1" in
 
     if [ -z "$BEFORE_SNAP" ]; then
       # No snapshot before the date — use oldest available snapshot
-      BEFORE_SNAP=$(ls "$SNAPSHOTS_DIR"/*.txt | sort | head -1)
+      BEFORE_SNAP="${snapshot_files[0]}"
       before_label="oldest snapshot ($(basename "$BEFORE_SNAP" .txt))"
     else
       before_label="snapshot from $(basename "$BEFORE_SNAP" .txt | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)_\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/')"

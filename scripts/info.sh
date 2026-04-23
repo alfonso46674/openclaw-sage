@@ -124,11 +124,7 @@ else
   if [ -f "$CACHE_FILE" ]; then
     word_count=$(wc -w < "$CACHE_FILE")
     echo "words:     $word_count"
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-      mtime=$(stat -f %m "$CACHE_FILE")
-    else
-      mtime=$(stat -c %Y "$CACHE_FILE")
-    fi
+    mtime=$(get_mtime "$CACHE_FILE")
     cached_at=$(date -d "@${mtime}" "+%Y-%m-%d %H:%M" 2>/dev/null \
                 || date -r "$CACHE_FILE" "+%Y-%m-%d %H:%M" 2>/dev/null)
     if is_cache_fresh "$CACHE_FILE" "$DOC_TTL"; then
