@@ -142,7 +142,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-16 — Progress display garbles when a shorter path follows a longer one
 - **File:** `scripts/build-index.sh:76`
-- **Status:** open
+- **Status:** done — 81fc8f4
 - **Description:** The fetch progress line uses `printf "\r  [%d/%d] %s          "` with a fixed number of trailing spaces. When a shorter path follows a longer one, the carriage return moves the cursor to column 0 but the spaces don't fully overwrite the leftover characters, leaving garbage visible (e.g., `zh-CN                         s          ubleshooting`). Cosmetic only — fetching is correct.
 - **Fix:** Pad the path field to a fixed width using `printf "\r  [%d/%d] %-40s" "$count" "$total" "$path"` so the column is always fully overwritten, or truncate long paths to a maximum width with a trailing `…`.
 
