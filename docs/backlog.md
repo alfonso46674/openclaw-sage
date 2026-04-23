@@ -124,7 +124,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-12 — `build-index.sh build` does not check `build-meta` exit code
 - **File:** `scripts/build-index.sh:117`
-- **Status:** open
+- **Status:** done — f7a37b7
 - **Description:** `python3 ... build-meta ...` failure (e.g. disk full writing `index_meta.json`) is not detected. The script continues and prints "Location: $INDEX_FILE" implying success.
 - **Fix:** Add `|| { echo "Error: build-meta failed" >&2; exit 1; }` after the python3 call.
 
