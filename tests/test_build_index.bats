@@ -336,6 +336,62 @@ EOF
   [ -f "$TEST_CACHE/doc_gateway_configuration.txt" ]
 }
 
+@test "ENH-20: fetch announces sequential fallback when xargs is unavailable or fails" {
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
+</urlset>
+XML
+
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      out="$2"
+      shift 2
+      ;;
+    -I|--max-time|-sf)
+      if [ "$1" = "--max-time" ]; then
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ "$url" == "https://docs.openclaw.ai" ]]; then
+  exit 0
+fi
+
+printf '<html><body><h1>Discord</h1><p>Discord setup</p></body></html>' > "$out"
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  cat > "$TEST_BIN/xargs" <<'EOF'
+#!/bin/bash
+exit 127
+EOF
+  chmod +x "$TEST_BIN/xargs"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"xargs unavailable or failed; falling back to sequential fetch."* ]]
+  [[ "$output" == *"[done] providers/discord"* ]]
+}
+
 # ---------------------------------------------------------------------------
 # build-index status
 # ---------------------------------------------------------------------------

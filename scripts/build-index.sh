@@ -73,13 +73,29 @@ case "$1" in
       fetch_jobs=8
     fi
     new=0
+    fetch_sequential() {
+      while IFS= read -r url; do
+        path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
+        [ -z "$path" ] && continue
+        cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
+        if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
+          safe="$(echo "$path" | tr '/' '_')"
+          if fetch_and_cache "$url" "$safe"; then
+            new=$((new + 1))
+            echo "  [done] $path" >&2
+          fi
+          sleep 0.3
+        fi
+      done <<< "$URLS"
+    }
+
     if command -v xargs &>/dev/null; then
       MARKER_DIR=$(mktemp -d)
       trap 'rm -rf "$MARKER_DIR"' EXIT
       export OPENCLAW_SAGE_CACHE_DIR OPENCLAW_SAGE_DOCS_BASE_URL OPENCLAW_SAGE_DOC_TTL OPENCLAW_SAGE_LANGS
       export LIB_SH="$SCRIPT_DIR/lib.sh" MARKER_DIR
 
-      printf '%s\n' "$URLS" \
+      if printf '%s\n' "$URLS" \
         | tr '\n' '\0' \
         | xargs -0 -n 1 -P "$fetch_jobs" bash -c '
             source "$LIB_SH"
@@ -96,28 +112,21 @@ case "$1" in
               fi
               sleep 0.3
             fi
-          ' --
-
-      set -- "$MARKER_DIR"/*
-      if [ -e "$1" ]; then
-        new=$#
+          ' --; then
+        set -- "$MARKER_DIR"/*
+        if [ -e "$1" ]; then
+          new=$#
+        fi
+      else
+        echo "xargs unavailable or failed; falling back to sequential fetch." >&2
+        new=0
+        fetch_sequential
       fi
       trap - EXIT
       rm -rf "$MARKER_DIR"
     else
-      while IFS= read -r url; do
-        path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
-        [ -z "$path" ] && continue
-        cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
-        if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
-          safe="$(echo "$path" | tr '/' '_')"
-          if fetch_and_cache "$url" "$safe"; then
-            new=$((new + 1))
-            echo "  [done] $path" >&2
-          fi
-          sleep 0.3
-        fi
-      done <<< "$URLS"
+      echo "xargs not available; falling back to sequential fetch." >&2
+      fetch_sequential
     fi
 
     cached=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
