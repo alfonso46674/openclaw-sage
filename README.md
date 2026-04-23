@@ -74,7 +74,7 @@ Build a local BM25 index for ranked search across all docs:
 
 ```bash
 ./scripts/build-index.sh fetch                  # Download all docs to cache (parallel by default; respects OPENCLAW_SAGE_LANGS)
-./scripts/build-index.sh build                  # Build BM25 index + index_meta.json
+./scripts/build-index.sh build                  # Build or incrementally refresh BM25 index + index_meta.json
 ./scripts/build-index.sh search "webhook retry" # BM25-ranked search over the built index only
 ./scripts/build-index.sh search --max-results 5 "webhook retry"
 ./scripts/build-index.sh status                 # Show doc/index/meta counts

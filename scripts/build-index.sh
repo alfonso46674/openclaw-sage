@@ -141,18 +141,75 @@ case "$1" in
       exit 1
     fi
 
-    : > "$INDEX_FILE"
+    META_FILE="${CACHE_DIR}/index_meta.json"
+    TMP_INDEX=$(mktemp)
+    CURRENT_PATHS=$(mktemp)
+    CHANGED_PATHS=$(mktemp)
+    UNCHANGED_PATHS=$(mktemp)
+    INDEXED_PATHS=$(mktemp)
+    trap 'rm -f "$TMP_INDEX" "$CURRENT_PATHS" "$CHANGED_PATHS" "$UNCHANGED_PATHS" "$INDEXED_PATHS"' RETURN
+
+    append_doc_lines() {
+      local doc_file="$1" out_file="$2" path
+      path=$(basename "$doc_file" .txt | sed 's/^doc_//; s/_/\//g')
+      grep -v '^[[:space:]]*$' "$doc_file" | while IFS= read -r line; do
+        echo "${path}|${line}"
+      done >> "$out_file"
+    }
+
     doc_count=0
+    changed_count=0
+    index_exists=false
+    [ -f "$INDEX_FILE" ] && index_exists=true
+    if $index_exists; then
+      index_mtime=$(get_mtime "$INDEX_FILE")
+    fi
+
     for f in "$CACHE_DIR"/doc_*.txt; do
       path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
-      grep -v '^[[:space:]]*$' "$f" | while IFS= read -r line; do
-        echo "${path}|${line}"
-      done >> "$INDEX_FILE"
+      echo "$path" >> "$CURRENT_PATHS"
       doc_count=$((doc_count + 1))
+      if ! $index_exists || [ "$(get_mtime "$f")" -gt "$index_mtime" ]; then
+        echo "$path" >> "$CHANGED_PATHS"
+        changed_count=$((changed_count + 1))
+      else
+        echo "$path" >> "$UNCHANGED_PATHS"
+      fi
     done
 
-    line_count=$(wc -l < "$INDEX_FILE")
-    echo "Index built: $doc_count docs, $line_count lines."
+    removed_count=0
+    if $index_exists; then
+      awk -F'|' '!seen[$1]++ { print $1 }' "$INDEX_FILE" > "$INDEXED_PATHS"
+      removed_count=$(awk '
+        NR==FNR { current[$0]=1; next }
+        !($0 in current) { removed++ }
+        END { print removed + 0 }
+      ' "$CURRENT_PATHS" "$INDEXED_PATHS")
+    fi
+
+    if $index_exists && [ "$changed_count" -eq 0 ] && [ "$removed_count" -eq 0 ]; then
+      line_count=$(wc -l < "$INDEX_FILE")
+      echo "Index already up to date: $doc_count docs, $line_count lines."
+    else
+      : > "$TMP_INDEX"
+      if $index_exists && [ -s "$INDEX_FILE" ] && [ -s "$UNCHANGED_PATHS" ]; then
+        awk -F'|' '
+          NR==FNR { keep[$0]=1; next }
+          ($1 in keep) { print }
+        ' "$UNCHANGED_PATHS" "$INDEX_FILE" >> "$TMP_INDEX"
+      fi
+
+      for f in "$CACHE_DIR"/doc_*.txt; do
+        path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
+        if ! $index_exists || grep -Fxq "$path" "$CHANGED_PATHS"; then
+          append_doc_lines "$f" "$TMP_INDEX"
+        fi
+      done
+
+      mv "$TMP_INDEX" "$INDEX_FILE"
+      line_count=$(wc -l < "$INDEX_FILE")
+      echo "Index built: $doc_count docs, $line_count lines."
+    fi
 
     if command -v python3 &>/dev/null; then
       echo "Building BM25 meta..." >&2

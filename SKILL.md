@@ -134,7 +134,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 
 ### `./scripts/build-index.sh build`
 **Purpose:** Build a full-text BM25 search index from cached docs.
-**When to use:** After `fetch`, to enable ranked search.
+**When to use:** After `fetch`, to enable ranked search. Re-running `build` incrementally refreshes the index by reprocessing only docs newer than `index.txt` and removing entries for docs that no longer exist in cache.
 **Output:** Confirmation with doc count and index location. Also writes `index_meta.json`.
 
 ### `./scripts/build-index.sh search [--max-results <n>] <query>`

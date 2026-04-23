@@ -183,6 +183,57 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# ENH-15 — build reuses unchanged index lines and only regenerates changed docs
+# ---------------------------------------------------------------------------
+
+@test "ENH-15: build incrementally updates changed docs and drops removed docs" {
+  printf 'alpha/doc|alpha old line\nbeta/doc|beta old line\nremoved/doc|stale line\n' > "$TEST_CACHE/index.txt"
+  echo "alpha old line" > "$TEST_CACHE/doc_alpha_doc.txt"
+  echo "beta new line" > "$TEST_CACHE/doc_beta_doc.txt"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    touch -t 202001010000 "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -t 202101010000 "$TEST_CACHE/index.txt"
+    touch -t 202201010000 "$TEST_CACHE/doc_beta_doc.txt"
+  else
+    touch -d "2020-01-01 00:00:00" "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -d "2021-01-01 00:00:00" "$TEST_CACHE/index.txt"
+    touch -d "2022-01-01 00:00:00" "$TEST_CACHE/doc_beta_doc.txt"
+  fi
+
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$BUILD_INDEX_SH" build
+
+  [ "$status" -eq 0 ]
+  grep -q '^alpha/doc|alpha old line$' "$TEST_CACHE/index.txt"
+  grep -q '^beta/doc|beta new line$' "$TEST_CACHE/index.txt"
+  ! grep -q '^beta/doc|beta old line$' "$TEST_CACHE/index.txt"
+  ! grep -q '^removed/doc|' "$TEST_CACHE/index.txt"
+}
+
+@test "ENH-15: build leaves index untouched when no docs changed" {
+  printf 'alpha/doc|alpha line\n' > "$TEST_CACHE/index.txt"
+  echo "alpha line" > "$TEST_CACHE/doc_alpha_doc.txt"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    touch -t 202001010000 "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -t 202101010000 "$TEST_CACHE/index.txt"
+  else
+    touch -d "2020-01-01 00:00:00" "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -d "2021-01-01 00:00:00" "$TEST_CACHE/index.txt"
+  fi
+
+  local before_mtime
+  before_mtime="$(bash -c "source '$LIB_SH'; get_mtime '$TEST_CACHE/index.txt'")"
+
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$BUILD_INDEX_SH" build
+
+  [ "$status" -eq 0 ]
+  local after_mtime
+  after_mtime="$(bash -c "source '$LIB_SH'; get_mtime '$TEST_CACHE/index.txt'")"
+  [ "$before_mtime" = "$after_mtime" ]
+}
+
+# ---------------------------------------------------------------------------
 # BUG-16 — fetch progress should not leave path suffix garbage behind
 # ---------------------------------------------------------------------------
 
