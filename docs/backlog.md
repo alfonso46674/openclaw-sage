@@ -82,7 +82,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-10 — Fetched HTML is not cleaned before caching; noise bleeds into `.txt` and search
 - **Files:** `scripts/lib.sh` (`fetch_and_cache`, `fetch_text`)
-- **Status:** open
+- **Status:** done — c9a5214
 - **Description:** Raw HTML is stored as-is. `<script>`, `<style>`, and structural chrome (`<nav>`, `<header>`, `<footer>`) are never removed. Two downstream problems:
   1. The `sed` fallback in `fetch_text` and `fetch_and_cache` processes HTML one line at a time, so multi-line `<script>`/`<style>` blocks (the norm) are not stripped — raw JS and CSS end up in `.txt`, polluting search and BM25 results.
   2. Even with `lynx`/`w3m`, navigation and footer text is included in the `.txt`, adding irrelevant tokens to the search index.
