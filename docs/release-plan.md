@@ -90,9 +90,12 @@ Minor bump — adds content-change awareness, config validation, and smarter sea
 | Item | Summary | Type |
 |------|---------|------|
 | ENH-19 | Content-change tracking (page-level checksums) | Enhancement |
+| ENH-25 | Doc archive snapshots with full-content diff | Enhancement |
 | ENH-21 | `validate-config.sh <config.json>` | Enhancement |
 | ENH-22 | Offline-first background auto-refresh | Enhancement |
 | ENH-24 | Synonym/expansion search | Enhancement |
+
+**Dependencies:** ENH-25 shares checksum infrastructure with ENH-19 and benefits from ENH-20's parallel fetch (ship ENH-19 and ENH-20 first).
 
 ---
 

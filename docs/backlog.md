@@ -266,6 +266,40 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
   - Provide a sample crontab entry in the README: `0 */6 * * * /path/to/build-index.sh auto-refresh`.
 - **Agent value:** Persistent agents (long-running sessions, CI-integrated agents) always have a warm, current cache. Eliminates the "first query is slow" problem.
 
+#### ENH-25 — Doc archive snapshots with full-content diff
+- **Status:** proposed
+- **Description:** `track-changes.sh` can snapshot and diff the doc *list* (added/removed pages) but cannot snapshot page *contents* at a point in time. This means release comparisons are limited: we can detect structural changes but cannot answer "what changed inside pages?" across two points in time because the cache drifts forward and stores no historical versions. This enhancement adds immutable content-archiving on top of the existing snapshot mechanism.
+- **New subcommands:**
+  - `track-changes.sh snapshot --archive` — fetches the current sitemap (honoring `OPENCLAW_SAGE_LANGS`, default `en`), retrieves extracted markdown/text for every doc (same canonical extraction as `fetch-doc.sh`), and writes an immutable content snapshot to a timestamped directory alongside the existing list snapshot.
+  - `track-changes.sh diff-archive <snapshot-A> <snapshot-B>` — compares two archive snapshots and reports Added / Removed / Changed / Unchanged pages. Supports `--summary` (counts + changed path list), `--write-diffs` (write unified diffs to `diffs/<A>__<B>/`), and `--max-diffs N` (limit console diff output).
+- **Storage layout:**
+  ```
+  $CACHE_DIR/snapshots/
+    20260422_183752.txt          # existing: list snapshot (unchanged)
+    20260422_183752/             # new: content snapshot directory
+      manifest.json
+      docs/
+        concepts/memory.md
+        cli/memory.md
+        tools/plugin.md
+        ...
+  ```
+- **`manifest.json` fields:** snapshot id + timestamp, base URL + language(s), doc count + fetched OK/failed counts, per-doc entry with path + sha256(content) + fetch status/error, tool version, active config knobs (langs, extraction mode, etc.).
+- **Diff method:** `diff -u` on stored `.md` files; normalize newlines before comparing.
+- **Performance / safety knobs:**
+  - `OPENCLAW_SAGE_FETCH_CONCURRENCY` (default 4–8, complements ENH-20's `OPENCLAW_SAGE_FETCH_JOBS`)
+  - `OPENCLAW_SAGE_FETCH_DELAY_MS` (politeness delay between requests)
+  - `--max-pages N` (cap for testing)
+  - `--best-effort` (default) vs `--fail-on-error`
+- **Implementation notes:**
+  - Reuse `fetch_and_cache` from `lib.sh`; do not duplicate fetch logic.
+  - The archive directory is write-once — never overwrite an existing snapshot directory.
+  - sha256 computation uses Python (`hashlib.sha256`) to stay cross-platform.
+  - Parallel fetching should delegate to ENH-20's `xargs -P` infrastructure when available.
+  - Use Python for all JSON generation (manifest, diff metadata) — no bash string concatenation.
+- **Dependencies:** ENH-19 (checksum infrastructure, ships in same release); ENH-20 (parallel fetch, ships in v0.3.0) is a soft dependency for performance.
+- **Agent value:** Enables "create a snapshot before a release, create another after, diff them" workflows. Agents and developers can answer "what changed in the docs between version X and version Y?" with actual text diffs, not just a list of touched pages.
+
 #### ENH-23 — Doc version awareness (builds on ENH-19)
 - **Status:** proposed
 - **Description:** Building on ENH-19's checksum storage, add the ability to answer "what changed in the docs between two points in time?" Currently `track-changes.sh` only tracks structural changes (pages added/removed). This enhancement stores checksums over time and can diff content changes between any two fetches.
