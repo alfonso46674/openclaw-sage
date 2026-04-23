@@ -17,10 +17,16 @@ setup() {
   echo "<html><body><h1>Hello</h1><p>World</p></body></html>" > "$TEST_CACHE/fixture.html"
   cat > "$TEST_CACHE/noisy_fixture.html" <<'HTML'
 <html>
+  <head>
+    <title>Guide Title | OpenClaw Docs</title>
+    <meta name="description" content="chrome noise">
+    <link rel="preload" href="/assets/app.js">
+  </head>
   <body>
     <header>Header links</header>
     <nav>Docs nav</nav>
-    <main>
+    <aside>Sidebar links</aside>
+    <div id="content">
       <h1>Guide Title</h1>
       <p>Useful body text.</p>
       <script>
@@ -29,7 +35,7 @@ setup() {
       <style>
         .hidden { display: none; }
       </style>
-    </main>
+    </div>
     <footer>Footer links</footer>
   </body>
 </html>
@@ -71,9 +77,14 @@ teardown() {
   [ -f "$TEST_CACHE/doc_clean_page.html" ]
   [ -f "$TEST_CACHE/doc_clean_page.txt" ]
 
+  grep -q "<title>Guide Title | OpenClaw Docs</title>" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<meta" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<link" "$TEST_CACHE/doc_clean_page.html"
   grep -q "<h1>Guide Title</h1>" "$TEST_CACHE/doc_clean_page.html"
+  grep -q 'id="content"' "$TEST_CACHE/doc_clean_page.html"
   ! grep -qi "<header" "$TEST_CACHE/doc_clean_page.html"
   ! grep -qi "<nav" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<aside" "$TEST_CACHE/doc_clean_page.html"
   ! grep -qi "<footer" "$TEST_CACHE/doc_clean_page.html"
   ! grep -qi "<script" "$TEST_CACHE/doc_clean_page.html"
   ! grep -qi "<style" "$TEST_CACHE/doc_clean_page.html"
@@ -82,6 +93,7 @@ teardown() {
   grep -q "Useful body text" "$TEST_CACHE/doc_clean_page.txt"
   ! grep -q "Header links" "$TEST_CACHE/doc_clean_page.txt"
   ! grep -q "Docs nav" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Sidebar links" "$TEST_CACHE/doc_clean_page.txt"
   ! grep -q "Footer links" "$TEST_CACHE/doc_clean_page.txt"
   ! grep -q "shouldNotAppear" "$TEST_CACHE/doc_clean_page.txt"
   ! grep -q "display: none" "$TEST_CACHE/doc_clean_page.txt"
