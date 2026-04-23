@@ -118,7 +118,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-11 — `curl` exit code not checked after sitemap fetch in `build-index.sh`
 - **File:** `scripts/build-index.sh:20-25`
-- **Status:** open
+- **Status:** done — 02b02bf
 - **Description:** `curl -sf ... -o "$SITEMAP_XML"` failure is silently ignored. If the fetch fails, `grep` on an empty/absent file produces no output, and the subsequent "Could not get URL list from sitemap. Run sitemap.sh first" message blames the wrong thing.
 - **Fix:** Check `$?` after the curl call and emit "Error: failed to fetch sitemap (network unreachable?)" with exit 1.
 
