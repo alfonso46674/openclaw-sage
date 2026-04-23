@@ -127,7 +127,8 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ### `./scripts/build-index.sh fetch`
 **Purpose:** Download all docs to local cache (both `.html` and `.txt`).
 **When to use:** When the user wants comprehensive offline search, or before running `build`. After fetching, `--toc`, `--section`, and `info.sh` all work offline without a second network request.
-**Output:** Progress counter, total docs cached.
+**Output:** One `[done] <path>` line per fetched doc, then total docs cached.
+**Notes:** Fetching runs in parallel by default when `xargs` is available. Tune worker count with `OPENCLAW_SAGE_FETCH_JOBS` (default `8`; set to `1` for sequential fetching). If `xargs` is unavailable, the script falls back to sequential fetching automatically.
 **Errors:** Exits immediately with a clear message if the host is unreachable (no timeout wait).
 
 ### `./scripts/build-index.sh build`

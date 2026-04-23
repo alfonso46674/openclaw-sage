@@ -171,14 +171,10 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# BUG-16 — progress rendering should fully overwrite prior paths
+# BUG-16 — fetch progress should not leave path suffix garbage behind
 # ---------------------------------------------------------------------------
 
 @test "BUG-16: fetch progress does not leave suffix garbage when a shorter path follows a longer one" {
-  if ! command -v python3 &>/dev/null; then
-    skip "python3 not available"
-  fi
-
   cat > "$TEST_CACHE/sitemap.xml" <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -187,57 +183,59 @@ EOF
 </urlset>
 XML
 
-  echo "cached content" > "$TEST_CACHE/doc_providers_very-long-provider-name_troubleshooting.txt"
-  echo "cached content" > "$TEST_CACHE/doc_providers_discord.txt"
-
   cat > "$TEST_BIN/curl" <<'EOF'
 #!/bin/bash
-for arg in "$@"; do
-  if [ "$arg" = "-I" ]; then
-    exit 0
-  fi
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      out="$2"
+      shift 2
+      ;;
+    -I|--max-time|-sf)
+      if [ "$1" = "--max-time" ]; then
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
 done
-exit 7
+
+if [[ "$url" == "https://docs.openclaw.ai" ]]; then
+  exit 0
+fi
+
+case "$url" in
+  https://docs.openclaw.ai/providers/very-long-provider-name/troubleshooting)
+    printf '<html><body><h1>Long</h1><p>Long path page</p></body></html>' > "$out"
+    ;;
+  https://docs.openclaw.ai/providers/discord)
+    printf '<html><body><h1>Discord</h1><p>Discord page</p></body></html>' > "$out"
+    ;;
+  *)
+    exit 7
+    ;;
+esac
 EOF
   chmod +x "$TEST_BIN/curl"
 
   run env PATH="$TEST_BIN:$PATH" \
     OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
     OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    OPENCLAW_SAGE_FETCH_JOBS="1" \
     "$BUILD_INDEX_SH" fetch
 
   [ "$status" -eq 0 ]
-
-  local rendered
-  rendered="$(python3 - "$output" <<'PYEOF'
-import sys
-text = sys.argv[1]
-lines = []
-line = []
-cursor = 0
-
-for ch in text:
-    if ch == '\r':
-        cursor = 0
-    elif ch == '\n':
-        lines.append(''.join(line))
-        line = []
-        cursor = 0
-    else:
-        if cursor >= len(line):
-            line.extend(' ' * (cursor - len(line) + 1))
-        line[cursor] = ch
-        cursor += 1
-
-if line:
-    lines.append(''.join(line))
-
-print('\n'.join(lines))
-PYEOF
-)"
-
-  [[ "$rendered" == *"[2/2] providers/discord"* ]]
-  [[ "$rendered" != *"providers/discord"*troubleshooting* ]]
+  [[ "$output" == *"[done] providers/very-long-provider-name/troubleshooting"* ]]
+  [[ "$output" == *"[done] providers/discord"* ]]
+  [[ "$output" != *"[1/2]"* ]]
+  [[ "$output" != *"providers/discord"*troubleshooting* ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -255,6 +253,87 @@ PYEOF
                '$BUILD_INDEX_SH' search searchterm 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *"custom.example.com"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# ENH-20 — fetch runs via xargs -P and reports per-doc completion lines
+# ---------------------------------------------------------------------------
+
+@test "ENH-20: fetch uses xargs parallel workers and prints done lines" {
+  local real_xargs
+  real_xargs="$(command -v xargs)"
+  [ -n "$real_xargs" ]
+
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
+  <url><loc>https://docs.openclaw.ai/gateway/configuration</loc></url>
+</urlset>
+XML
+
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      out="$2"
+      shift 2
+      ;;
+    -I|--max-time|-sf)
+      if [ "$1" = "--max-time" ]; then
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ "$url" == "https://docs.openclaw.ai" ]]; then
+  exit 0
+fi
+
+case "$url" in
+  https://docs.openclaw.ai/providers/discord)
+    printf '<html><body><h1>Discord</h1><p>Discord setup</p></body></html>' > "$out"
+    ;;
+  https://docs.openclaw.ai/gateway/configuration)
+    printf '<html><body><h1>Gateway</h1><p>Gateway config</p></body></html>' > "$out"
+    ;;
+  *)
+    exit 7
+    ;;
+esac
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  cat > "$TEST_BIN/xargs" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" > "$TEST_CACHE/xargs_args.txt"
+exec "$real_xargs" "\$@"
+EOF
+  chmod +x "$TEST_BIN/xargs"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    OPENCLAW_SAGE_FETCH_JOBS="2" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 0 ]
+  grep -q -- "-P 2" "$TEST_CACHE/xargs_args.txt"
+  [[ "$output" == *"[done] providers/discord"* ]]
+  [[ "$output" == *"[done] gateway/configuration"* ]]
+  [[ "$output" != *"[1/2]"* ]]
+  [ -f "$TEST_CACHE/doc_providers_discord.txt" ]
+  [ -f "$TEST_CACHE/doc_gateway_configuration.txt" ]
 }
 
 # ---------------------------------------------------------------------------

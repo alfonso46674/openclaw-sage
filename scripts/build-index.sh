@@ -67,35 +67,59 @@ case "$1" in
       exit 1
     fi
 
-    total=$(echo "$URLS" | wc -l)
-    max_path_width=$(echo "$URLS" | awk -v base_url="$DOCS_BASE_URL/" '
-      {
-        path = $0
-        sub("^" base_url, "", path)
-        if (length(path) > max) max = length(path)
-      }
-      END { print max + 0 }
-    ')
-    count=0
+    total=$(printf '%s\n' "$URLS" | wc -l)
+    fetch_jobs="$FETCH_JOBS"
+    if ! [[ "$fetch_jobs" =~ ^[0-9]+$ ]] || [ "$fetch_jobs" -le 0 ]; then
+      fetch_jobs=8
+    fi
     new=0
+    if command -v xargs &>/dev/null; then
+      MARKER_DIR=$(mktemp -d)
+      trap 'rm -rf "$MARKER_DIR"' EXIT
+      export OPENCLAW_SAGE_CACHE_DIR OPENCLAW_SAGE_DOCS_BASE_URL OPENCLAW_SAGE_DOC_TTL OPENCLAW_SAGE_LANGS
+      export LIB_SH="$SCRIPT_DIR/lib.sh" MARKER_DIR
 
-    while IFS= read -r url; do
-      path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
-      [ -z "$path" ] && continue
-      cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
-      count=$((count + 1))
-      printf "\r  [%d/%d] %-*s" "$count" "$total" "$max_path_width" "$path" >&2
+      printf '%s\n' "$URLS" \
+        | tr '\n' '\0' \
+        | xargs -0 -n 1 -P "$fetch_jobs" bash -c '
+            source "$LIB_SH"
+            url="$1"
+            [ -z "$url" ] && exit 0
+            path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
+            [ -z "$path" ] && exit 0
+            safe=$(echo "$path" | tr "/" "_")
+            cache_file="${CACHE_DIR}/doc_${safe}.txt"
+            if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
+              if fetch_and_cache "$url" "$safe"; then
+                touch "${MARKER_DIR}/${safe}"
+                echo "  [done] $path" >&2
+              fi
+              sleep 0.3
+            fi
+          ' --
 
-      if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
-        safe="$(echo "$path" | tr '/' '_')"
-        if fetch_and_cache "$url" "$safe"; then
-          new=$((new + 1))
-        fi
-        sleep 0.3  # be polite to the server
+      set -- "$MARKER_DIR"/*
+      if [ -e "$1" ]; then
+        new=$#
       fi
-    done <<< "$URLS"
+      trap - EXIT
+      rm -rf "$MARKER_DIR"
+    else
+      while IFS= read -r url; do
+        path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
+        [ -z "$path" ] && continue
+        cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
+        if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
+          safe="$(echo "$path" | tr '/' '_')"
+          if fetch_and_cache "$url" "$safe"; then
+            new=$((new + 1))
+            echo "  [done] $path" >&2
+          fi
+          sleep 0.3
+        fi
+      done <<< "$URLS"
+    fi
 
-    printf "\n" >&2
     cached=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
     echo "Done. $new new docs fetched, $cached total cached."
     echo "Next: run './scripts/build-index.sh build' to index them."

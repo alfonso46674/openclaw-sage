@@ -109,6 +109,11 @@ HTML
   [ "$DOC_TTL" -gt 0 ]
 }
 
+@test "FETCH_JOBS is a positive integer" {
+  [[ "$FETCH_JOBS" =~ ^[0-9]+$ ]]
+  [ "$FETCH_JOBS" -gt 0 ]
+}
+
 @test "SITEMAP_TTL can be overridden via env var" {
   OPENCLAW_SAGE_SITEMAP_TTL=999 source "$REPO_ROOT/scripts/lib.sh"
   [ "$SITEMAP_TTL" -eq 999 ]
@@ -117,6 +122,11 @@ HTML
 @test "DOC_TTL can be overridden via env var" {
   OPENCLAW_SAGE_DOC_TTL=42 source "$REPO_ROOT/scripts/lib.sh"
   [ "$DOC_TTL" -eq 42 ]
+}
+
+@test "FETCH_JOBS can be overridden via env var" {
+  OPENCLAW_SAGE_FETCH_JOBS=3 source "$REPO_ROOT/scripts/lib.sh"
+  [ "$FETCH_JOBS" -eq 3 ]
 }
 
 @test "CACHE_DIR is created on source" {

@@ -6,6 +6,7 @@ An [OpenClaw](https://openclaw.ai) skill that makes any agent an expert on [Open
 
 - `bash`
 - `curl`
+- `xargs` *(standard on macOS/Linux; used for parallel `build-index.sh fetch`)*
 - `python3` *(optional, recommended — enables BM25 ranked search, `--toc`/`--section` extraction, JSON output, and `recent.sh` date parsing)*
 - `lynx` or `w3m` *(optional, recommended — improves HTML-to-text quality)*
 
@@ -17,6 +18,7 @@ All variables are optional. Defaults work out of the box.
 |---|---|---|
 | `OPENCLAW_SAGE_SITEMAP_TTL` | `3600` | Sitemap cache TTL in seconds (1hr) |
 | `OPENCLAW_SAGE_DOC_TTL` | `86400` | Doc page cache TTL in seconds (24hr) |
+| `OPENCLAW_SAGE_FETCH_JOBS` | `8` | Parallel worker count for `build-index.sh fetch` (`1` restores sequential behavior) |
 | `OPENCLAW_SAGE_CACHE_DIR` | `<skill_root>/.cache/openclaw-sage` | Cache directory |
 | `OPENCLAW_SAGE_LANGS` | `en` | Languages to fetch: comma-separated codes (`en,zh`) or `all` |
 | `OPENCLAW_SAGE_OUTPUT` | *(unset)* | Set to `json` for machine-readable output from `search.sh` and `sitemap.sh` |
@@ -26,6 +28,7 @@ Examples:
 ```bash
 OPENCLAW_SAGE_DOC_TTL=60 ./scripts/fetch-doc.sh gateway/configuration
 OPENCLAW_SAGE_LANGS=en,zh ./scripts/build-index.sh fetch
+OPENCLAW_SAGE_FETCH_JOBS=4 ./scripts/build-index.sh fetch
 OPENCLAW_SAGE_OUTPUT=json ./scripts/search.sh webhook
 ```
 
@@ -67,7 +70,7 @@ All scripts live in `./scripts/` and cache results in `.cache/openclaw-sage/` in
 Build a local BM25 index for ranked search across all docs:
 
 ```bash
-./scripts/build-index.sh fetch                  # Download all docs to cache (respects OPENCLAW_SAGE_LANGS)
+./scripts/build-index.sh fetch                  # Download all docs to cache (parallel by default; respects OPENCLAW_SAGE_LANGS)
 ./scripts/build-index.sh build                  # Build BM25 index + index_meta.json
 ./scripts/build-index.sh search "webhook retry" # BM25-ranked search
 ./scripts/build-index.sh status                 # Show doc/index/meta counts
