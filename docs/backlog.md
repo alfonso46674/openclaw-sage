@@ -347,7 +347,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Example:** `search.sh --lang fr webhook`
 
 #### ENH-15 — Incremental index builds
-- **Status:** proposed
+- **Status:** done — 0ecda5c
 - **Description:** `build-index.sh build` always rebuilds `index.txt` from scratch. For large corpora, a delta build that only reprocesses `.txt` files newer than `index.txt` would be significantly faster.
 - **Implementation notes:** Compare `stat` mtime of each `doc_*.txt` against `index.txt`. Only rewrite changed doc's lines in `index.txt`. Rebuild `index_meta.json` after any change.
 
