@@ -15,6 +15,40 @@ teardown() {
   rm -rf "$TEST_CACHE"
 }
 
+# --- fetch_text ---
+
+@test "fetch_text strips multiline script/style blocks and page chrome from plain text" {
+  cat > "$TEST_CACHE/noisy.html" <<'HTML'
+<html>
+  <body>
+    <header>Header links</header>
+    <nav>Docs nav</nav>
+    <main>
+      <h1>Guide Title</h1>
+      <p>Useful body text.</p>
+      <script>
+        const shouldNotAppear = "script noise";
+      </script>
+      <style>
+        .hidden { display: none; }
+      </style>
+    </main>
+    <footer>Footer links</footer>
+  </body>
+</html>
+HTML
+
+  run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' source '$REPO_ROOT/scripts/lib.sh'; fetch_text 'file://$TEST_CACHE/noisy.html'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Guide Title"* ]]
+  [[ "$output" == *"Useful body text."* ]]
+  [[ "$output" != *"Header links"* ]]
+  [[ "$output" != *"Docs nav"* ]]
+  [[ "$output" != *"Footer links"* ]]
+  [[ "$output" != *"shouldNotAppear"* ]]
+  [[ "$output" != *"display: none"* ]]
+}
+
 # --- is_cache_fresh ---
 
 @test "get_mtime: returns 1 for missing file" {

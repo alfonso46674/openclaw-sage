@@ -15,6 +15,25 @@ setup() {
   mkdir -p "$TEST_BIN"
   # Seed a local HTML file — used as a file:// URL so no HTTP server is needed
   echo "<html><body><h1>Hello</h1><p>World</p></body></html>" > "$TEST_CACHE/fixture.html"
+  cat > "$TEST_CACHE/noisy_fixture.html" <<'HTML'
+<html>
+  <body>
+    <header>Header links</header>
+    <nav>Docs nav</nav>
+    <main>
+      <h1>Guide Title</h1>
+      <p>Useful body text.</p>
+      <script>
+        const shouldNotAppear = "script noise";
+      </script>
+      <style>
+        .hidden { display: none; }
+      </style>
+    </main>
+    <footer>Footer links</footer>
+  </body>
+</html>
+HTML
 }
 
 teardown() {
@@ -43,6 +62,29 @@ teardown() {
   [ "$status" -eq 1 ]
   [ ! -f "$TEST_CACHE/doc_missing_page.txt" ]
   [ ! -f "$TEST_CACHE/doc_missing_page.html" ]
+}
+
+@test "BUG-10: fetch_and_cache strips chrome/script/style noise while preserving content headings" {
+  run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' source '$LIB_SH'; fetch_and_cache 'file://$TEST_CACHE/noisy_fixture.html' 'clean_page'"
+  [ "$status" -eq 0 ]
+
+  [ -f "$TEST_CACHE/doc_clean_page.html" ]
+  [ -f "$TEST_CACHE/doc_clean_page.txt" ]
+
+  grep -q "<h1>Guide Title</h1>" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<header" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<nav" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<footer" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<script" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<style" "$TEST_CACHE/doc_clean_page.html"
+
+  grep -q "Guide Title" "$TEST_CACHE/doc_clean_page.txt"
+  grep -q "Useful body text" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Header links" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Docs nav" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Footer links" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "shouldNotAppear" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "display: none" "$TEST_CACHE/doc_clean_page.txt"
 }
 
 # ---------------------------------------------------------------------------
