@@ -10,6 +10,9 @@ setup() {
   export TEST_CACHE
   TEST_CACHE="$(mktemp -d)"
   export OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE"
+  export TEST_BIN
+  TEST_BIN="$TEST_CACHE/bin"
+  mkdir -p "$TEST_BIN"
   # Seed a local HTML file — used as a file:// URL so no HTTP server is needed
   echo "<html><body><h1>Hello</h1><p>World</p></body></html>" > "$TEST_CACHE/fixture.html"
 }
@@ -72,6 +75,32 @@ XML
   grep -q "Error: Could not get URL list" "$stderr_file"
   # Error should NOT be in stdout
   ! grep -q "Error: Could not get URL list" "$stdout_file"
+}
+
+# ---------------------------------------------------------------------------
+# BUG-11 — sitemap fetch failures should be reported directly
+# ---------------------------------------------------------------------------
+
+@test "BUG-11: fetch stops with sitemap fetch error when sitemap curl fails" {
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+for arg in "$@"; do
+  if [ "$arg" = "-I" ]; then
+    exit 0
+  fi
+done
+exit 7
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Error: failed to fetch sitemap"* ]]
+  [[ "$output" != *"Error: Could not get URL list from sitemap"* ]]
 }
 
 # ---------------------------------------------------------------------------

@@ -19,7 +19,10 @@ case "$1" in
     # Ensure sitemap XML is available
     if [ ! -f "$SITEMAP_XML" ]; then
       echo "Fetching sitemap first..." >&2
-      curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null
+      if ! curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
+        echo "Error: failed to fetch sitemap (network unreachable?)" >&2
+        exit 1
+      fi
     fi
 
     ALL_URLS=$(grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" 2>/dev/null | sed 's/<[^>]*>//g' | grep "${DOCS_BASE_URL}/" | grep -v "^${DOCS_BASE_URL}/$")
