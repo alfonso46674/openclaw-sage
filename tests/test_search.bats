@@ -22,6 +22,12 @@ teardown() {
   [[ "$output" == *"Usage"* ]]
 }
 
+@test "--max-results requires a positive integer" {
+  run "$SEARCH_SH" --max-results nope webhook
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Usage"* ]]
+}
+
 # --- No cache behaviour ---
 
 @test "single keyword with no cache exits 0 and shows instructions" {
@@ -82,6 +88,15 @@ teardown() {
   [[ "$output" == *"providers/discord"* ]]
 }
 
+@test "--max-results limits cached-doc fallback matches" {
+  echo "webhook retry configuration guide" > "$TEST_CACHE/doc_automation_webhook.txt"
+  echo "webhook setup notes" > "$TEST_CACHE/doc_gateway_webhook.txt"
+  run "$SEARCH_SH" --max-results 1 webhook
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"automation/webhook"* ]]
+  [[ "$output" != *"gateway/webhook"* ]]
+}
+
 # --- Sitemap path matches ---
 
 @test "finds sitemap path match when sitemap.txt is seeded" {
@@ -107,6 +122,17 @@ teardown() {
   [[ "$output" == *"custom.example.com"* ]]
 }
 
+@test "--max-results limits BM25 human output" {
+  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$SEARCH_SH" --max-results 1 searchkeyword
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"alpha/doc"* ]]
+  [[ "$output" != *"beta/doc"* ]]
+}
+
 # --- BUG-19 regression: diagnostic tip must not appear on stdout ---
 
 @test "BUG-19: Tip text does not appear on stdout" {
@@ -125,4 +151,15 @@ teardown() {
       OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$SEARCH_SH" --json searchkeyword
   [ "$status" -eq 0 ]
   [[ "$output" == *"custom.example.com"* ]]
+}
+
+@test "--json max-results limits BM25 result count" {
+  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$SEARCH_SH" --json --max-results 1 searchkeyword
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"alpha/doc"'* ]]
+  [[ "$output" != *'"beta/doc"'* ]]
 }

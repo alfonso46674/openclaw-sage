@@ -50,6 +50,7 @@ All scripts live in `./scripts/` and cache results in `.cache/openclaw-sage/` in
 
 ```bash
 ./scripts/search.sh discord                   # Search cached docs by keyword (BM25 ranked if index built)
+./scripts/search.sh --max-results 3 webhook   # Limit output to the top N matches
 ./scripts/search.sh --json "webhook retry"    # Same, as JSON {query, mode, results[]}
 ./scripts/recent.sh 7                         # Docs updated in the last N days (default: 7)
 
@@ -58,6 +59,8 @@ All scripts live in `./scripts/` and cache results in `.cache/openclaw-sage/` in
 ./scripts/fetch-doc.sh gateway/configuration --section "Retry Settings"  # Extract one section
 ./scripts/fetch-doc.sh gateway/configuration --max-lines 50              # Truncate output
 ```
+
+`search.sh` is the default discovery command: it uses BM25 when an index exists, but can also fall back to cached-doc grep and sitemap path matches.
 
 **Recommended workflow for long docs:**
 ```bash
@@ -72,9 +75,12 @@ Build a local BM25 index for ranked search across all docs:
 ```bash
 ./scripts/build-index.sh fetch                  # Download all docs to cache (parallel by default; respects OPENCLAW_SAGE_LANGS)
 ./scripts/build-index.sh build                  # Build BM25 index + index_meta.json
-./scripts/build-index.sh search "webhook retry" # BM25-ranked search
+./scripts/build-index.sh search "webhook retry" # BM25-ranked search over the built index only
+./scripts/build-index.sh search --max-results 5 "webhook retry"
 ./scripts/build-index.sh status                 # Show doc/index/meta counts
 ```
+
+`build-index.sh search` is the index-only query tool: it requires `index.txt` and does not fall back to cached docs or sitemap matches.
 
 ### Version Tracking
 

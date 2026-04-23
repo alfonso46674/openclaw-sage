@@ -255,6 +255,24 @@ EOF
   [[ "$output" == *"custom.example.com"* ]]
 }
 
+@test "ENH-09: build-index search --max-results requires a positive integer" {
+  printf 'test/page|searchterm in doc content\n' > "$TEST_CACHE/index.txt"
+  run "$BUILD_INDEX_SH" search --max-results nope searchterm
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Usage: build-index.sh search [--max-results N] <query>"* ]]
+}
+
+@test "ENH-09: build-index search --max-results limits BM25 output" {
+  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$BUILD_INDEX_SH" search --max-results 1 searchkeyword
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"alpha/doc"* ]]
+  [[ "$output" != *"beta/doc"* ]]
+}
+
 # ---------------------------------------------------------------------------
 # ENH-20 — fetch runs via xargs -P and reports per-doc completion lines
 # ---------------------------------------------------------------------------

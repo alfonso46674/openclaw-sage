@@ -95,10 +95,11 @@ url:       https://docs.openclaw.ai/gateway/configuration
 
 ---
 
-### `./scripts/search.sh [--json] <keyword...>`
+### `./scripts/search.sh [--json] [--max-results <n>] <keyword...>`
 **Purpose:** Search cached docs and sitemap paths by keyword.
 **When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.
-**Input:** One or more keywords — quotes are never required (`search.sh webhook retry` works). Add `--json` for machine-readable output.
+**Input:** One or more keywords — quotes are never required (`search.sh webhook retry` works). Add `--json` for machine-readable output. Use `--max-results <n>` to cap the number of matching docs returned (default `10`).
+**Notes:** This is the discovery-first search command. It uses BM25 when an index exists, but can fall back to cached-doc grep and sitemap path matches when a full index is unavailable.
 
 **Human output (unified format):**
 ```
@@ -136,12 +137,13 @@ url:       https://docs.openclaw.ai/gateway/configuration
 **When to use:** After `fetch`, to enable ranked search.
 **Output:** Confirmation with doc count and index location. Also writes `index_meta.json`.
 
-### `./scripts/build-index.sh search <query>`
+### `./scripts/build-index.sh search [--max-results <n>] <query>`
 **Purpose:** BM25-ranked full-text search over the complete doc corpus.
 **When to use:** When `search.sh` results are insufficient and the index is built.
-**Input:** Query string (multi-word queries supported).
+**Input:** Query string (multi-word queries supported). Use `--max-results <n>` to cap the number of ranked results returned (default `10`).
+**Notes:** This is the index-only search path. It requires `index.txt` and does not fall back to cached-doc grep or sitemap matches.
 **Output:**
-```
+``` 
   [0.823] gateway/configuration  ->  https://docs.openclaw.ai/gateway/configuration
           Configure retry settings with maxAttempts...
 ```

@@ -168,11 +168,29 @@ case "$1" in
 
   search)
     shift
-    if [ -z "$*" ]; then
-      echo "Usage: build-index.sh search <query>"
+    MAX_RESULTS=10
+    QUERY_ARGS=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --max-results)
+          shift
+          if [ -z "$1" ] || ! [[ "$1" =~ ^[0-9]+$ ]] || [ "$1" -le 0 ]; then
+            echo "Usage: build-index.sh search [--max-results N] <query>"
+            exit 1
+          fi
+          MAX_RESULTS="$1"
+          ;;
+        *)
+          QUERY_ARGS+=("$1")
+          ;;
+      esac
+      shift
+    done
+    QUERY="${QUERY_ARGS[*]}"
+    if [ -z "$QUERY" ]; then
+      echo "Usage: build-index.sh search [--max-results N] <query>"
       exit 1
     fi
-    QUERY="$*"
 
     if [ ! -f "$INDEX_FILE" ]; then
       echo "No index found. Run:"
@@ -185,7 +203,7 @@ case "$1" in
     echo ""
 
     if command -v python3 &>/dev/null; then
-      python3 "$SCRIPT_DIR/bm25_search.py" search "$INDEX_FILE" "$QUERY" \
+      python3 "$SCRIPT_DIR/bm25_search.py" search "$INDEX_FILE" "$QUERY" "$MAX_RESULTS" \
         | while IFS='|' read -r score path excerpt; do
             score=$(echo "$score" | tr -d ' ')
             path=$(echo "$path" | tr -d ' ')
@@ -212,7 +230,7 @@ case "$1" in
               }
             }
           ' \
-        | head -80
+        | head -"$((MAX_RESULTS * 4))"
       echo ""
       echo "Note: Install python3 for ranked BM25 results."
     fi
@@ -239,6 +257,6 @@ case "$1" in
     ;;
 
   *)
-    echo "Usage: build-index.sh {fetch|build|search <query>|status}"
+    echo "Usage: build-index.sh {fetch|build|search [--max-results N] <query>|status}"
     ;;
 esac
