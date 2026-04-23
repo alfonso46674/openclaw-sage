@@ -136,7 +136,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-14 — Mtime OS detection logic duplicated across three files
 - **Files:** `scripts/lib.sh:20-25`, `scripts/cache.sh:12-17`, `scripts/info.sh:124-126`
-- **Status:** open
+- **Status:** done — 76c29ca
 - **Description:** The macOS (`stat -f %m`) vs Linux (`stat -c %Y`) branch is copy-pasted in three places. The canonical version is in `lib.sh`; the others exist because they need the raw mtime integer for display (not just a freshness boolean). `is_cache_fresh` doesn't expose the value.
 - **Fix:** Add a `get_mtime <file>` helper to `lib.sh` that returns the epoch integer. Call it from all three sites.
 
@@ -370,7 +370,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Implementation notes:** Write pinned paths to `$CACHE_DIR/pinned.txt` (one path per line). Modify `is_cache_fresh` to check this file and return 0 (fresh) unconditionally for pinned paths.
 
 #### ENH-16 — `get_mtime` helper in `lib.sh` (supports BUG-14 fix)
-- **Status:** proposed
+- **Status:** done — 76c29ca
 - **Description:** Expose the raw epoch mtime integer from `lib.sh` so scripts can format timestamps without re-implementing the OS detection branch. Resolves the three-way duplication in BUG-14.
 - **Implementation notes:** `get_mtime <file>` → prints integer epoch to stdout. Returns 1 if file does not exist.
 
