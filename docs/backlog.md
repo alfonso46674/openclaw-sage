@@ -130,7 +130,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-13 — `for f in $(ls ... | sort)` anti-pattern in `track-changes.sh`
 - **File:** `scripts/track-changes.sh:49,75`
-- **Status:** open
+- **Status:** done — 5666878
 - **Description:** Parsing `ls` output is fragile and unnecessary. Snapshot filenames are always `YYYYMMDD_HHMMSS.txt` so glob sorts correctly.
 - **Fix:** Replace `for f in $(ls "$SNAPSHOTS_DIR"/*.txt | sort)` with `for f in "$SNAPSHOTS_DIR"/*.txt`.
 
