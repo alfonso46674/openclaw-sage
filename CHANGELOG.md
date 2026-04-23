@@ -5,6 +5,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.2.5] — 2026-04-23
+
+### Fixed
+
+- **BUG-11** (`build-index.sh`) — sitemap download failures during `build-index.sh fetch` were silently ignored, causing a misleading downstream "Could not get URL list from sitemap" error. The script now fails immediately with `Error: failed to fetch sitemap (network unreachable?)`.
+- **BUG-12** (`build-index.sh`) — `build-index.sh build` did not check whether `python3 ... build-meta` succeeded, so it could print success-style output after metadata generation failed. The build now exits with `Error: build-meta failed`.
+- **BUG-13** (`track-changes.sh`) — removed `for f in $(ls ... | sort)` snapshot iteration in favor of direct glob/array iteration, preserving chronological behavior without parsing `ls` output.
+- **BUG-14** (`lib.sh`, `cache.sh`, `info.sh`) — duplicated OS-specific mtime lookup logic was consolidated into a shared `get_mtime <file>` helper in `lib.sh`, and all callers now use that canonical path.
+- **BUG-16** (`build-index.sh`) — fetch progress rendering no longer leaves suffix garbage behind when a shorter path follows a longer one. Progress updates now pad to the widest path in the current run before rewriting the line.
+
+### Added
+
+- `tests/test_build_index.bats` — 3 new tests: BUG-11 sitemap fetch failure handling, BUG-12 build-meta failure handling, and BUG-16 carriage-return progress rendering regression.
+- `tests/test_track_changes.bats` — 2 new characterization tests covering snapshot ordering and oldest-snapshot selection used by the BUG-13 cleanup.
+- `tests/test_lib.bats` — 2 new helper tests covering `get_mtime` missing-file and epoch-output behavior.
+
+---
+
 ## [0.2.4] — 2026-03-11
 
 ### Fixed
