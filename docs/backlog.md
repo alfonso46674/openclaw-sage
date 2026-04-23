@@ -162,7 +162,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Dependencies:** requires BM25 search + `fetch-doc.sh --section` to work correctly.
 
 #### ENH-20 — Parallel doc fetching in `build-index.sh fetch`
-- **Status:** proposed
+- **Status:** done — 9eed1bb
 - **Description:** The fetch loop is strictly sequential: one HTTP request must complete before the next starts, plus a 0.3s courtesy sleep per request. With 100+ docs each taking 1–3 seconds, a cold cache takes 10–15 minutes. Parallelising with `xargs -P` brings this down to roughly `total_time / N` without adding any new dependencies.
 - **New env var:** `OPENCLAW_SAGE_FETCH_JOBS` (default `8`, set to `1` to restore sequential behaviour). Add to `lib.sh` alongside the other `OPENCLAW_SAGE_*` vars and document in `README.md`.
 - **Implementation notes:**
