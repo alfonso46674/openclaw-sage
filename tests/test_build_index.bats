@@ -15,6 +15,31 @@ setup() {
   mkdir -p "$TEST_BIN"
   # Seed a local HTML file — used as a file:// URL so no HTTP server is needed
   echo "<html><body><h1>Hello</h1><p>World</p></body></html>" > "$TEST_CACHE/fixture.html"
+  cat > "$TEST_CACHE/noisy_fixture.html" <<'HTML'
+<html>
+  <head>
+    <title>Guide Title | OpenClaw Docs</title>
+    <meta name="description" content="chrome noise">
+    <link rel="preload" href="/assets/app.js">
+  </head>
+  <body>
+    <header>Header links</header>
+    <nav>Docs nav</nav>
+    <aside>Sidebar links</aside>
+    <div id="content">
+      <h1>Guide Title</h1>
+      <p>Useful body text.</p>
+      <script>
+        const shouldNotAppear = "script noise";
+      </script>
+      <style>
+        .hidden { display: none; }
+      </style>
+    </div>
+    <footer>Footer links</footer>
+  </body>
+</html>
+HTML
 }
 
 teardown() {
@@ -43,6 +68,35 @@ teardown() {
   [ "$status" -eq 1 ]
   [ ! -f "$TEST_CACHE/doc_missing_page.txt" ]
   [ ! -f "$TEST_CACHE/doc_missing_page.html" ]
+}
+
+@test "BUG-10: fetch_and_cache strips chrome/script/style noise while preserving content headings" {
+  run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' source '$LIB_SH'; fetch_and_cache 'file://$TEST_CACHE/noisy_fixture.html' 'clean_page'"
+  [ "$status" -eq 0 ]
+
+  [ -f "$TEST_CACHE/doc_clean_page.html" ]
+  [ -f "$TEST_CACHE/doc_clean_page.txt" ]
+
+  grep -q "<title>Guide Title | OpenClaw Docs</title>" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<meta" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<link" "$TEST_CACHE/doc_clean_page.html"
+  grep -q "<h1>Guide Title</h1>" "$TEST_CACHE/doc_clean_page.html"
+  grep -q 'id="content"' "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<header" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<nav" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<aside" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<footer" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<script" "$TEST_CACHE/doc_clean_page.html"
+  ! grep -qi "<style" "$TEST_CACHE/doc_clean_page.html"
+
+  grep -q "Guide Title" "$TEST_CACHE/doc_clean_page.txt"
+  grep -q "Useful body text" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Header links" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Docs nav" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Sidebar links" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "Footer links" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "shouldNotAppear" "$TEST_CACHE/doc_clean_page.txt"
+  ! grep -q "display: none" "$TEST_CACHE/doc_clean_page.txt"
 }
 
 # ---------------------------------------------------------------------------
@@ -129,14 +183,61 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
-# BUG-16 — progress rendering should fully overwrite prior paths
+# ENH-15 — build reuses unchanged index lines and only regenerates changed docs
+# ---------------------------------------------------------------------------
+
+@test "ENH-15: build incrementally updates changed docs and drops removed docs" {
+  printf 'alpha/doc|alpha old line\nbeta/doc|beta old line\nremoved/doc|stale line\n' > "$TEST_CACHE/index.txt"
+  echo "alpha old line" > "$TEST_CACHE/doc_alpha_doc.txt"
+  echo "beta new line" > "$TEST_CACHE/doc_beta_doc.txt"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    touch -t 202001010000 "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -t 202101010000 "$TEST_CACHE/index.txt"
+    touch -t 202201010000 "$TEST_CACHE/doc_beta_doc.txt"
+  else
+    touch -d "2020-01-01 00:00:00" "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -d "2021-01-01 00:00:00" "$TEST_CACHE/index.txt"
+    touch -d "2022-01-01 00:00:00" "$TEST_CACHE/doc_beta_doc.txt"
+  fi
+
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$BUILD_INDEX_SH" build
+
+  [ "$status" -eq 0 ]
+  grep -q '^alpha/doc|alpha old line$' "$TEST_CACHE/index.txt"
+  grep -q '^beta/doc|beta new line$' "$TEST_CACHE/index.txt"
+  ! grep -q '^beta/doc|beta old line$' "$TEST_CACHE/index.txt"
+  ! grep -q '^removed/doc|' "$TEST_CACHE/index.txt"
+}
+
+@test "ENH-15: build leaves index untouched when no docs changed" {
+  printf 'alpha/doc|alpha line\n' > "$TEST_CACHE/index.txt"
+  echo "alpha line" > "$TEST_CACHE/doc_alpha_doc.txt"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    touch -t 202001010000 "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -t 202101010000 "$TEST_CACHE/index.txt"
+  else
+    touch -d "2020-01-01 00:00:00" "$TEST_CACHE/doc_alpha_doc.txt"
+    touch -d "2021-01-01 00:00:00" "$TEST_CACHE/index.txt"
+  fi
+
+  local before_mtime
+  before_mtime="$(bash -c "source '$LIB_SH'; get_mtime '$TEST_CACHE/index.txt'")"
+
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$BUILD_INDEX_SH" build
+
+  [ "$status" -eq 0 ]
+  local after_mtime
+  after_mtime="$(bash -c "source '$LIB_SH'; get_mtime '$TEST_CACHE/index.txt'")"
+  [ "$before_mtime" = "$after_mtime" ]
+}
+
+# ---------------------------------------------------------------------------
+# BUG-16 — fetch progress should not leave path suffix garbage behind
 # ---------------------------------------------------------------------------
 
 @test "BUG-16: fetch progress does not leave suffix garbage when a shorter path follows a longer one" {
-  if ! command -v python3 &>/dev/null; then
-    skip "python3 not available"
-  fi
-
   cat > "$TEST_CACHE/sitemap.xml" <<'XML'
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -145,57 +246,59 @@ EOF
 </urlset>
 XML
 
-  echo "cached content" > "$TEST_CACHE/doc_providers_very-long-provider-name_troubleshooting.txt"
-  echo "cached content" > "$TEST_CACHE/doc_providers_discord.txt"
-
   cat > "$TEST_BIN/curl" <<'EOF'
 #!/bin/bash
-for arg in "$@"; do
-  if [ "$arg" = "-I" ]; then
-    exit 0
-  fi
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      out="$2"
+      shift 2
+      ;;
+    -I|--max-time|-sf)
+      if [ "$1" = "--max-time" ]; then
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
 done
-exit 7
+
+if [[ "$url" == "https://docs.openclaw.ai" ]]; then
+  exit 0
+fi
+
+case "$url" in
+  https://docs.openclaw.ai/providers/very-long-provider-name/troubleshooting)
+    printf '<html><body><h1>Long</h1><p>Long path page</p></body></html>' > "$out"
+    ;;
+  https://docs.openclaw.ai/providers/discord)
+    printf '<html><body><h1>Discord</h1><p>Discord page</p></body></html>' > "$out"
+    ;;
+  *)
+    exit 7
+    ;;
+esac
 EOF
   chmod +x "$TEST_BIN/curl"
 
   run env PATH="$TEST_BIN:$PATH" \
     OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
     OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    OPENCLAW_SAGE_FETCH_JOBS="1" \
     "$BUILD_INDEX_SH" fetch
 
   [ "$status" -eq 0 ]
-
-  local rendered
-  rendered="$(python3 - "$output" <<'PYEOF'
-import sys
-text = sys.argv[1]
-lines = []
-line = []
-cursor = 0
-
-for ch in text:
-    if ch == '\r':
-        cursor = 0
-    elif ch == '\n':
-        lines.append(''.join(line))
-        line = []
-        cursor = 0
-    else:
-        if cursor >= len(line):
-            line.extend(' ' * (cursor - len(line) + 1))
-        line[cursor] = ch
-        cursor += 1
-
-if line:
-    lines.append(''.join(line))
-
-print('\n'.join(lines))
-PYEOF
-)"
-
-  [[ "$rendered" == *"[2/2] providers/discord"* ]]
-  [[ "$rendered" != *"providers/discord"*troubleshooting* ]]
+  [[ "$output" == *"[done] providers/very-long-provider-name/troubleshooting"* ]]
+  [[ "$output" == *"[done] providers/discord"* ]]
+  [[ "$output" != *"[1/2]"* ]]
+  [[ "$output" != *"providers/discord"*troubleshooting* ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -213,6 +316,161 @@ PYEOF
                '$BUILD_INDEX_SH' search searchterm 2>&1"
   [ "$status" -eq 0 ]
   [[ "$output" == *"custom.example.com"* ]]
+}
+
+@test "ENH-09: build-index search --max-results requires a positive integer" {
+  printf 'test/page|searchterm in doc content\n' > "$TEST_CACHE/index.txt"
+  run "$BUILD_INDEX_SH" search --max-results nope searchterm
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Usage: build-index.sh search [--max-results N] <query>"* ]]
+}
+
+@test "ENH-09: build-index search --max-results limits BM25 output" {
+  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_CACHE/index.txt"
+  if ! command -v python3 &>/dev/null; then
+    skip "python3 not available"
+  fi
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$BUILD_INDEX_SH" search --max-results 1 searchkeyword
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"alpha/doc"* ]]
+  [[ "$output" != *"beta/doc"* ]]
+}
+
+# ---------------------------------------------------------------------------
+# ENH-20 — fetch runs via xargs -P and reports per-doc completion lines
+# ---------------------------------------------------------------------------
+
+@test "ENH-20: fetch uses xargs parallel workers and prints done lines" {
+  local real_xargs
+  real_xargs="$(command -v xargs)"
+  [ -n "$real_xargs" ]
+
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
+  <url><loc>https://docs.openclaw.ai/gateway/configuration</loc></url>
+</urlset>
+XML
+
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      out="$2"
+      shift 2
+      ;;
+    -I|--max-time|-sf)
+      if [ "$1" = "--max-time" ]; then
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ "$url" == "https://docs.openclaw.ai" ]]; then
+  exit 0
+fi
+
+case "$url" in
+  https://docs.openclaw.ai/providers/discord)
+    printf '<html><body><h1>Discord</h1><p>Discord setup</p></body></html>' > "$out"
+    ;;
+  https://docs.openclaw.ai/gateway/configuration)
+    printf '<html><body><h1>Gateway</h1><p>Gateway config</p></body></html>' > "$out"
+    ;;
+  *)
+    exit 7
+    ;;
+esac
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  cat > "$TEST_BIN/xargs" <<EOF
+#!/bin/bash
+printf '%s\n' "\$*" > "$TEST_CACHE/xargs_args.txt"
+exec "$real_xargs" "\$@"
+EOF
+  chmod +x "$TEST_BIN/xargs"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    OPENCLAW_SAGE_FETCH_JOBS="2" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 0 ]
+  grep -q -- "-P 2" "$TEST_CACHE/xargs_args.txt"
+  [[ "$output" == *"[done] providers/discord"* ]]
+  [[ "$output" == *"[done] gateway/configuration"* ]]
+  [[ "$output" != *"[1/2]"* ]]
+  [ -f "$TEST_CACHE/doc_providers_discord.txt" ]
+  [ -f "$TEST_CACHE/doc_gateway_configuration.txt" ]
+}
+
+@test "ENH-20: fetch announces sequential fallback when xargs is unavailable or fails" {
+  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
+</urlset>
+XML
+
+  cat > "$TEST_BIN/curl" <<'EOF'
+#!/bin/bash
+out=""
+url=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -o)
+      out="$2"
+      shift 2
+      ;;
+    -I|--max-time|-sf)
+      if [ "$1" = "--max-time" ]; then
+        shift 2
+      else
+        shift
+      fi
+      ;;
+    *)
+      url="$1"
+      shift
+      ;;
+  esac
+done
+
+if [[ "$url" == "https://docs.openclaw.ai" ]]; then
+  exit 0
+fi
+
+printf '<html><body><h1>Discord</h1><p>Discord setup</p></body></html>' > "$out"
+EOF
+  chmod +x "$TEST_BIN/curl"
+
+  cat > "$TEST_BIN/xargs" <<'EOF'
+#!/bin/bash
+exit 127
+EOF
+  chmod +x "$TEST_BIN/xargs"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" \
+    "$BUILD_INDEX_SH" fetch
+
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"xargs unavailable or failed; falling back to sequential fetch."* ]]
+  [[ "$output" == *"[done] providers/discord"* ]]
 }
 
 # ---------------------------------------------------------------------------

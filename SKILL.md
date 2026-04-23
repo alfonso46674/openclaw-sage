@@ -1,7 +1,7 @@
 ---
 name: openclaw-sage
 description: OpenClaw documentation expert — answers user questions about OpenClaw setup, configuration, providers, troubleshooting, and what's new using live doc fetching, BM25 search, and change tracking
-version: 0.2.5
+version: 0.3.0
 metadata:
   openclaw:
     requires:
@@ -95,10 +95,11 @@ url:       https://docs.openclaw.ai/gateway/configuration
 
 ---
 
-### `./scripts/search.sh [--json] <keyword...>`
+### `./scripts/search.sh [--json] [--max-results <n>] <keyword...>`
 **Purpose:** Search cached docs and sitemap paths by keyword.
 **When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.
-**Input:** One or more keywords — quotes are never required (`search.sh webhook retry` works). Add `--json` for machine-readable output.
+**Input:** One or more keywords — quotes are never required (`search.sh webhook retry` works). Add `--json` for machine-readable output. Use `--max-results <n>` to cap the number of matching docs returned (default `10`).
+**Notes:** This is the discovery-first search command. It uses BM25 when an index exists, but can fall back to cached-doc grep and sitemap path matches when a full index is unavailable.
 
 **Human output (unified format):**
 ```
@@ -127,20 +128,22 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ### `./scripts/build-index.sh fetch`
 **Purpose:** Download all docs to local cache (both `.html` and `.txt`).
 **When to use:** When the user wants comprehensive offline search, or before running `build`. After fetching, `--toc`, `--section`, and `info.sh` all work offline without a second network request.
-**Output:** Progress counter, total docs cached.
+**Output:** One `[done] <path>` line per fetched doc, then total docs cached.
+**Notes:** Fetching runs in parallel by default when `xargs` is available. Tune worker count with `OPENCLAW_SAGE_FETCH_JOBS` (default `8`; set to `1` for sequential fetching). If `xargs` is unavailable, the script falls back to sequential fetching automatically.
 **Errors:** Exits immediately with a clear message if the host is unreachable (no timeout wait).
 
 ### `./scripts/build-index.sh build`
 **Purpose:** Build a full-text BM25 search index from cached docs.
-**When to use:** After `fetch`, to enable ranked search.
+**When to use:** After `fetch`, to enable ranked search. Re-running `build` incrementally refreshes the index by reprocessing only docs newer than `index.txt` and removing entries for docs that no longer exist in cache.
 **Output:** Confirmation with doc count and index location. Also writes `index_meta.json`.
 
-### `./scripts/build-index.sh search <query>`
+### `./scripts/build-index.sh search [--max-results <n>] <query>`
 **Purpose:** BM25-ranked full-text search over the complete doc corpus.
 **When to use:** When `search.sh` results are insufficient and the index is built.
-**Input:** Query string (multi-word queries supported).
+**Input:** Query string (multi-word queries supported). Use `--max-results <n>` to cap the number of ranked results returned (default `10`).
+**Notes:** This is the index-only search path. It requires `index.txt` and does not fall back to cached-doc grep or sitemap matches.
 **Output:**
-```
+``` 
   [0.823] gateway/configuration  ->  https://docs.openclaw.ai/gateway/configuration
           Configure retry settings with maxAttempts...
 ```

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Search docs by keyword
-# Usage: search.sh [--json] <keyword...>
+# Usage: search.sh [--json] [--max-results N] <keyword...>
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
@@ -8,17 +8,31 @@ source "$SCRIPT_DIR/lib.sh"
 # Parse flags
 JSON=false
 [[ "${OPENCLAW_SAGE_OUTPUT}" == "json" ]] && JSON=true
+MAX_RESULTS=10
 ARGS=()
-for arg in "$@"; do
-  case "$arg" in
-    --json) JSON=true ;;
-    *) ARGS+=("$arg") ;;
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --json)
+      JSON=true
+      ;;
+    --max-results)
+      shift
+      if [ -z "$1" ] || ! [[ "$1" =~ ^[0-9]+$ ]] || [ "$1" -le 0 ]; then
+        echo "Usage: search.sh [--json] [--max-results N] <keyword>"
+        exit 1
+      fi
+      MAX_RESULTS="$1"
+      ;;
+    *)
+      ARGS+=("$1")
+      ;;
   esac
+  shift
 done
 KEYWORD="${ARGS[*]}"
 
 if [ -z "$KEYWORD" ]; then
-  echo "Usage: search.sh [--json] <keyword>"
+  echo "Usage: search.sh [--json] [--max-results N] <keyword>"
   exit 1
 fi
 
@@ -32,7 +46,7 @@ if $JSON; then
     exit 1
   fi
   python3 - "$INDEX_FILE" "$KEYWORD" "$DOCS_BASE_URL" \
-              "$SCRIPT_DIR/bm25_search.py" "$SITEMAP_CACHE" "$CACHE_DIR" <<'PYEOF'
+              "$SCRIPT_DIR/bm25_search.py" "$SITEMAP_CACHE" "$CACHE_DIR" "$MAX_RESULTS" <<'PYEOF'
 import sys, json, os, subprocess
 
 index_file    = sys.argv[1]
@@ -41,13 +55,14 @@ base_url      = sys.argv[3]
 bm25_script   = sys.argv[4]
 sitemap_cache = sys.argv[5]
 cache_dir     = sys.argv[6]
+max_results   = int(sys.argv[7])
 
 results = []
 mode = None
 
 # 1. BM25 ranked search
 if os.path.exists(index_file):
-    proc = subprocess.run(['python3', bm25_script, 'search', index_file, keyword],
+    proc = subprocess.run(['python3', bm25_script, 'search', index_file, keyword, str(max_results)],
                           capture_output=True, text=True)
     for line in proc.stdout.strip().splitlines():
         parts = line.split(' | ', 2)
@@ -66,6 +81,8 @@ elif any(f.startswith('doc_') and f.endswith('.txt')
          for f in os.listdir(cache_dir)):
     kw = keyword.lower()
     for fname in sorted(os.listdir(cache_dir)):
+        if len(results) >= max_results:
+            break
         if not (fname.startswith('doc_') and fname.endswith('.txt')):
             continue
         fpath = os.path.join(cache_dir, fname)
@@ -91,6 +108,8 @@ if os.path.exists(sitemap_cache):
     kw = keyword.lower()
     with open(sitemap_cache) as f:
         for line in f:
+            if len(sitemap_matches) >= max_results:
+                break
             if kw in line.lower() and line.strip().startswith('-'):
                 path = line.strip().lstrip('- ').strip()
                 sitemap_matches.append({'path': path, 'url': f'{base_url}/{path}'})
@@ -117,7 +136,7 @@ found=0
 # 1. BM25 ranked search
 if [ -f "$INDEX_FILE" ] && command -v python3 &>/dev/null; then
   echo "=== Full-text index matches (BM25 ranked) ==="
-  python3 "$SCRIPT_DIR/bm25_search.py" search "$INDEX_FILE" "$KEYWORD" \
+  python3 "$SCRIPT_DIR/bm25_search.py" search "$INDEX_FILE" "$KEYWORD" "$MAX_RESULTS" \
     | while IFS='|' read -r score path excerpt; do
         score=$(echo "$score" | tr -d ' ')
         path=$(echo "$path" | tr -d ' ')
@@ -144,7 +163,7 @@ elif [ -f "$INDEX_FILE" ]; then
           if (count < 3) { gsub(/^[[:space:]]+/, "", $2); print "        " $2; count++ }
         }
       ' \
-    | head -60
+    | head -"$((MAX_RESULTS * 4))"
   echo ""
   found=1
 
@@ -152,7 +171,7 @@ elif ls "$CACHE_DIR"/doc_*.txt &>/dev/null 2>&1; then
   echo "=== Cached doc matches ==="
   echo "Note: Run './scripts/build-index.sh build' for ranked BM25 results."
   echo ""
-  grep -ril "$KEYWORD" "$CACHE_DIR"/doc_*.txt 2>/dev/null | while IFS= read -r f; do
+  grep -ril "$KEYWORD" "$CACHE_DIR"/doc_*.txt 2>/dev/null | head -"$MAX_RESULTS" | while IFS= read -r f; do
     path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
     echo "  [---] $path  ->  ${DOCS_BASE_URL}/$path"
     grep -i "$KEYWORD" "$f" | head -3 | sed 's/^[[:space:]]*/        /'
@@ -166,7 +185,7 @@ if [ -f "$SITEMAP_CACHE" ]; then
   matches=$(grep -i "$KEYWORD" "$SITEMAP_CACHE" | grep '^\s*-')
   if [ -n "$matches" ]; then
     echo "=== Matching doc paths ==="
-    echo "$matches" | head -15 | sed 's/^[[:space:]]*/  /'
+    echo "$matches" | head -"$MAX_RESULTS" | sed 's/^[[:space:]]*/  /'
     echo ""
   fi
 fi

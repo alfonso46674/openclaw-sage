@@ -82,7 +82,7 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-10 — Fetched HTML is not cleaned before caching; noise bleeds into `.txt` and search
 - **Files:** `scripts/lib.sh` (`fetch_and_cache`, `fetch_text`)
-- **Status:** open
+- **Status:** done — c9a5214
 - **Description:** Raw HTML is stored as-is. `<script>`, `<style>`, and structural chrome (`<nav>`, `<header>`, `<footer>`) are never removed. Two downstream problems:
   1. The `sed` fallback in `fetch_text` and `fetch_and_cache` processes HTML one line at a time, so multi-line `<script>`/`<style>` blocks (the norm) are not stripped — raw JS and CSS end up in `.txt`, polluting search and BM25 results.
   2. Even with `lynx`/`w3m`, navigation and footer text is included in the `.txt`, adding irrelevant tokens to the search index.
@@ -162,7 +162,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Dependencies:** requires BM25 search + `fetch-doc.sh --section` to work correctly.
 
 #### ENH-20 — Parallel doc fetching in `build-index.sh fetch`
-- **Status:** proposed
+- **Status:** done — 9eed1bb
 - **Description:** The fetch loop is strictly sequential: one HTTP request must complete before the next starts, plus a 0.3s courtesy sleep per request. With 100+ docs each taking 1–3 seconds, a cold cache takes 10–15 minutes. Parallelising with `xargs -P` brings this down to roughly `total_time / N` without adding any new dependencies.
 - **New env var:** `OPENCLAW_SAGE_FETCH_JOBS` (default `8`, set to `1` to restore sequential behaviour). Add to `lib.sh` alongside the other `OPENCLAW_SAGE_*` vars and document in `README.md`.
 - **Implementation notes:**
@@ -315,7 +315,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 ### Tier 4 (small effort — proposed)
 
 #### ENH-09 — `search.sh --max-results N`
-- **Status:** proposed
+- **Status:** done — 4d4652e
 - **Description:** BM25 caps results at 20 internally but exposes no CLI control. Agents doing narrow queries want top-3; broad exploration queries want more. Simple one-line addition.
 - **Implementation notes:** Pass `N` as a fourth argument to `bm25_search.py search` and slice the results list. Default `N=10`.
 
@@ -347,7 +347,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Example:** `search.sh --lang fr webhook`
 
 #### ENH-15 — Incremental index builds
-- **Status:** proposed
+- **Status:** done — 0ecda5c
 - **Description:** `build-index.sh build` always rebuilds `index.txt` from scratch. For large corpora, a delta build that only reprocesses `.txt` files newer than `index.txt` would be significantly faster.
 - **Implementation notes:** Compare `stat` mtime of each `doc_*.txt` against `index.txt`. Only rewrite changed doc's lines in `index.txt`. Rebuild `index_meta.json` after any change.
 
