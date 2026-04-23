@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.3.0] — 2026-04-23
+
+### Fixed
+
+- **BUG-10** (`lib.sh`) — cached HTML is now reduced to a minimal parsing artifact instead of preserving most of the Mintlify page shell. The cleaner keeps the page title plus the actual content subtree used by `info.sh`, `fetch-doc.sh --toc`, and `fetch-doc.sh --section`, while stripping preload/meta clutter, layout chrome, and multiline script/style noise from both cached `.html` and derived `.txt`.
+
+### Added
+
+- **`OPENCLAW_SAGE_FETCH_JOBS`** env var in `lib.sh` — controls parallel worker count for `build-index.sh fetch` (default `8`; set to `1` for sequential behavior).
+- **`search.sh --max-results <n>`** — caps result count across BM25, cached-doc grep fallback, and sitemap path matches. Supported in both human-readable and `--json` output modes.
+- **`build-index.sh search --max-results <n>`** — caps ranked BM25 results on the index-only query path for consistency with `search.sh`.
+- `tests/test_build_index.bats` — regression coverage for cleaned/minimal cached HTML, `build-index.sh search --max-results`, parallel fetch worker usage, sequential fallback logging, and incremental index builds.
+- `tests/test_search.bats` — regression coverage for `search.sh --max-results` across BM25, JSON, and cached-doc fallback modes.
+- `tests/test_lib.bats` — helper coverage for the new `FETCH_JOBS` env var.
+
+### Changed
+
+- **`build-index.sh fetch`** — now downloads docs in parallel with `xargs -0 -n 1 -P` when available, emits one `  [done] <path>` line per completed fetch, and logs when it falls back to sequential downloading because `xargs` is unavailable or fails.
+- **`build-index.sh build`** — now refreshes `index.txt` incrementally: unchanged docs keep their existing index lines, only docs newer than `index.txt` are reprocessed, removed docs are dropped from the index, and the file is left untouched when the cached corpus has not changed. `index_meta.json` is still rebuilt from the current index state.
+- **Search docs** (`README.md`, `SKILL.md`) — now explicitly distinguish the two search entry points: `search.sh` is the discovery-first command with BM25/grep/sitemap fallbacks, while `build-index.sh search` is the index-only BM25 query tool.
+
 ## [0.2.5] — 2026-04-23
 
 ### Fixed
