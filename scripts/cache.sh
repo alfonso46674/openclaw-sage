@@ -9,12 +9,7 @@ case "$1" in
   status)
     if [ -f "$SITEMAP_CACHE" ]; then
       if is_cache_fresh "$SITEMAP_CACHE" "$SITEMAP_TTL"; then
-        local_mtime=""
-        if [[ "$OSTYPE" == "darwin"* ]]; then
-          local_mtime=$(stat -f %m "$SITEMAP_CACHE")
-        else
-          local_mtime=$(stat -c %Y "$SITEMAP_CACHE")
-        fi
+        local_mtime=$(get_mtime "$SITEMAP_CACHE")
         cached_at=$(date -d "@${local_mtime}" 2>/dev/null || date -r "$local_mtime" 2>/dev/null)
         echo "Cache status: FRESH"
         echo "Location:     $CACHE_DIR"

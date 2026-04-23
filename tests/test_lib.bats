@@ -17,6 +17,18 @@ teardown() {
 
 # --- is_cache_fresh ---
 
+@test "get_mtime: returns 1 for missing file" {
+  run get_mtime "$TEST_CACHE/nonexistent.txt"
+  [ "$status" -eq 1 ]
+}
+
+@test "get_mtime: returns an epoch integer for an existing file" {
+  touch "$TEST_CACHE/existing.txt"
+  run get_mtime "$TEST_CACHE/existing.txt"
+  [ "$status" -eq 0 ]
+  [[ "$output" =~ ^[0-9]+$ ]]
+}
+
 @test "is_cache_fresh: returns 1 for missing file" {
   run is_cache_fresh "$TEST_CACHE/nonexistent.txt" 3600
   [ "$status" -eq 1 ]
