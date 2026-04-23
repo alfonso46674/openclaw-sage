@@ -315,7 +315,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 ### Tier 4 (small effort — proposed)
 
 #### ENH-09 — `search.sh --max-results N`
-- **Status:** proposed
+- **Status:** done — 4d4652e
 - **Description:** BM25 caps results at 20 internally but exposes no CLI control. Agents doing narrow queries want top-3; broad exploration queries want more. Simple one-line addition.
 - **Implementation notes:** Pass `N` as a fourth argument to `bm25_search.py search` and slice the results list. Default `N=10`.
 
