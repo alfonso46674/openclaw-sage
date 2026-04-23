@@ -68,6 +68,14 @@ case "$1" in
     fi
 
     total=$(echo "$URLS" | wc -l)
+    max_path_width=$(echo "$URLS" | awk -v base_url="$DOCS_BASE_URL/" '
+      {
+        path = $0
+        sub("^" base_url, "", path)
+        if (length(path) > max) max = length(path)
+      }
+      END { print max + 0 }
+    ')
     count=0
     new=0
 
@@ -76,7 +84,7 @@ case "$1" in
       [ -z "$path" ] && continue
       cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
       count=$((count + 1))
-      printf "\r  [%d/%d] %s          " "$count" "$total" "$path" >&2
+      printf "\r  [%d/%d] %-*s" "$count" "$total" "$max_path_width" "$path" >&2
 
       if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
         safe="$(echo "$path" | tr '/' '_')"
