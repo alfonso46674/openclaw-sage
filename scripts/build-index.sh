@@ -115,7 +115,10 @@ case "$1" in
 
     if command -v python3 &>/dev/null; then
       echo "Building BM25 meta..." >&2
-      python3 "$SCRIPT_DIR/bm25_search.py" build-meta "$INDEX_FILE"
+      python3 "$SCRIPT_DIR/bm25_search.py" build-meta "$INDEX_FILE" || {
+        echo "Error: build-meta failed" >&2
+        exit 1
+      }
     fi
 
     echo "Location: $INDEX_FILE"

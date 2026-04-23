@@ -104,6 +104,31 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# BUG-12 — build must stop if build-meta fails
+# ---------------------------------------------------------------------------
+
+@test "BUG-12: build stops with error when build-meta fails" {
+  echo "searchterm in doc content" > "$TEST_CACHE/doc_test_page.txt"
+
+  cat > "$TEST_BIN/python3" <<'EOF'
+#!/bin/bash
+if [ "$2" = "build-meta" ]; then
+  exit 9
+fi
+exec /usr/bin/env python3 "$@"
+EOF
+  chmod +x "$TEST_BIN/python3"
+
+  run env PATH="$TEST_BIN:$PATH" \
+    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+    "$BUILD_INDEX_SH" build
+
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Error: build-meta failed"* ]]
+  [[ "$output" != *"Location:"* ]]
+}
+
+# ---------------------------------------------------------------------------
 # BUG-17 — hardcoded URL regression in build-index.sh
 # ---------------------------------------------------------------------------
 
