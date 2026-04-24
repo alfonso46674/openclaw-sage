@@ -26,6 +26,7 @@ You are an expert on OpenClaw documentation. Your job is to accurately answer us
 **Purpose:** List all available documentation pages grouped by category.
 **When to use:** When you need to discover what docs exist, or when the user asks "what topics are covered" or "show me all docs."
 **Input:** Optional `--json` flag (or set `OPENCLAW_SAGE_OUTPUT=json`).
+**Source:** reads from `docs.json` in the GitHub repo (or local clone per `OPENCLAW_SAGE_SOURCE`).
 
 **JSON output:**
 ```json
@@ -42,6 +43,7 @@ You are an expert on OpenClaw documentation. Your job is to accurately answer us
 **Purpose:** Fetch and display a specific documentation page as readable text.
 **When to use:** When you know the doc path and need its content. This is the primary way to answer specific questions.
 **Input:** Doc path (e.g. `gateway/configuration`, `providers/discord`). No leading slash needed.
+**Note:** Accepts `--version <tag>` to target a specific cached version.
 
 **Flags:**
 - `--toc` — list headings only (no body). Use first to find the right section name.
@@ -66,6 +68,7 @@ fetch-doc.sh gateway/configuration --section retry # fetch only that section
 **Purpose:** Return lightweight metadata for a cached doc without loading its full content.
 **When to use:** Before fetching a long doc, to confirm it's relevant and estimate token cost from word count and headings.
 **Input:** Doc path. The doc must already be cached — run `fetch-doc.sh <path>` first.
+**Note:** Accepts `--version <tag>` to target a specific cached version.
 
 **Output (human):**
 ```
@@ -100,6 +103,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 **When to use:** When you're unsure which doc to fetch, or the user's question spans multiple topics.
 **Input:** One or more keywords — quotes are never required (`search.sh webhook retry` works). Add `--json` for machine-readable output. Use `--max-results <n>` to cap the number of matching docs returned (default `10`).
 **Notes:** This is the discovery-first search command. It uses BM25 when an index exists, but can fall back to cached-doc grep and sitemap path matches when a full index is unavailable.
+**Note:** Accepts `--version <tag>` to target a specific cached version.
 
 **Human output (unified format):**
 ```
@@ -130,6 +134,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 **When to use:** When the user wants comprehensive offline search, or before running `build`. After fetching, `--toc`, `--section`, and `info.sh` all work offline without a second network request.
 **Output:** One `[done] <path>` line per fetched doc, then total docs cached.
 **Notes:** Fetching runs in parallel by default when `xargs` is available. Tune worker count with `OPENCLAW_SAGE_FETCH_JOBS` (default `8`; set to `1` for sequential fetching). If `xargs` is unavailable, the script falls back to sequential fetching automatically.
+**Version:** Add `--version <tag>` to fetch docs at a specific OpenClaw release (e.g. `./scripts/build-index.sh fetch --version v2026.4.22`). Default fetches from `main`.
 **Errors:** Exits immediately with a clear message if the host is unreachable (no timeout wait).
 
 ### `./scripts/build-index.sh build`
@@ -155,7 +160,7 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ---
 
 ### `./scripts/cache.sh status`
-**Purpose:** Show cache health, location, doc count, and active TTL values.
+**Purpose:** Show cache health, location, and active TTL values. Lists all cached versions with doc counts and index status.
 **Output includes:** TTL values and the env vars that override them.
 
 ### `./scripts/cache.sh refresh`
@@ -164,11 +169,16 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ### `./scripts/cache.sh clear-docs`
 **Purpose:** Delete all cached doc files and the search index.
 
+### `./scripts/cache.sh tags`
+**Purpose:** List available OpenClaw release tags from GitHub. Use to discover which `--version` values can be fetched.
+**Notes:** GitHub source mode only. Local source mode prints an informational message.
+
 ---
 
 ### `./scripts/recent.sh [days]`
 **Purpose:** Show docs updated recently.
 **Input:** Number of days — must be a positive integer (default: 7). Non-numeric values exit 1 with a usage message.
+**Note:** Accepts `--version <tag>` to target a specific cached version.
 **Output:**
 - `=== Docs updated at source in the last N days ===` — from sitemap `lastmod` dates
 - `=== Recently accessed locally (last N days) ===` — by local file mtime
@@ -358,10 +368,10 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ## Cache & Config
 
 Default TTLs (overridable via env vars):
-- Sitemap: `OPENCLAW_SAGE_SITEMAP_TTL` (default 3600s / 1hr)
 - Doc pages: `OPENCLAW_SAGE_DOC_TTL` (default 86400s / 24hr)
 - Cache dir: `OPENCLAW_SAGE_CACHE_DIR` (default `<skill_root>/.cache/openclaw-sage`)
 - Languages: `OPENCLAW_SAGE_LANGS` (default `en`; use `en,zh` for multiple, `all` for everything)
+- Source: `OPENCLAW_SAGE_SOURCE` (default `github`; use `local:/path/to/openclaw/docs` for a local repo clone)
 
 Example override:
 ```bash
