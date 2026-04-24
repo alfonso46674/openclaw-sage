@@ -149,7 +149,7 @@ PYEOF
     CHANGED_PATHS=$(mktemp)
     UNCHANGED_PATHS=$(mktemp)
     INDEXED_PATHS=$(mktemp)
-    trap 'rm -f "$TMP_INDEX" "$CURRENT_PATHS" "$CHANGED_PATHS" "$UNCHANGED_PATHS" "$INDEXED_PATHS"' RETURN
+    trap 'rm -f "$TMP_INDEX" "$CURRENT_PATHS" "$CHANGED_PATHS" "$UNCHANGED_PATHS" "$INDEXED_PATHS"' EXIT
 
     append_doc_lines() {
       local doc_file="$1" out_file="$2" path
