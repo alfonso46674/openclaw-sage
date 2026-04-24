@@ -16,10 +16,10 @@ teardown() {
 
 # --- status ---
 
-@test "status with no sitemap shows EMPTY" {
+@test "status shows cache location" {
   run "$CACHE_SH" status
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Cache status: EMPTY"* ]]
+  [[ "$output" == *"Cache location"* ]]
 }
 
 @test "status always shows TTL config section" {
@@ -28,30 +28,26 @@ teardown() {
   [[ "$output" == *"TTL config"* ]]
 }
 
-@test "status with fresh sitemap shows FRESH and doc count" {
-  echo "sitemap content" > "$TEST_CACHE/sitemap.txt"
-  echo "doc content" > "$TEST_CACHE/doc_gateway_configuration.txt"
+@test "status with empty version dir shows 0 docs" {
+  # parse_version_flag always creates the latest/ dir; it just has 0 docs
   run "$CACHE_SH" status
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Cache status: FRESH"* ]]
-  [[ "$output" == *"Cached docs:"* ]]
-  [[ "$output" == *"1"* ]]
+  [[ "$output" == *"latest"* ]]
+  [[ "$output" == *"0 docs"* ]]
 }
 
-@test "status with stale sitemap shows STALE" {
-  if [[ "$OSTYPE" == "darwin"* ]]; then
-    touch -t 202001010000 "$TEST_CACHE/sitemap.txt"
-  else
-    touch -d "2020-01-01" "$TEST_CACHE/sitemap.txt"
-  fi
+@test "status with version dirs shows version name and doc count" {
+  mkdir -p "$TEST_CACHE/latest"
+  touch "$TEST_CACHE/latest/doc_gateway_configuration.txt"
   run "$CACHE_SH" status
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Cache status: STALE"* ]]
+  [[ "$output" == *"latest"* ]]
+  [[ "$output" == *"1"* ]]
 }
 
 # --- dir ---
 
-@test "dir prints the cache directory path" {
+@test "dir prints the versioned cache directory path" {
   run "$CACHE_SH" dir
   [ "$status" -eq 0 ]
   [[ "$output" == *"$TEST_CACHE"* ]]
@@ -59,55 +55,53 @@ teardown() {
 
 # --- refresh ---
 
-@test "refresh removes sitemap.txt" {
-  echo "content" > "$TEST_CACHE/sitemap.txt"
+@test "refresh removes docs.json from active version dir" {
+  mkdir -p "$TEST_CACHE/latest"
+  echo '{}' > "$TEST_CACHE/latest/docs.json"
   run "$CACHE_SH" refresh
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_CACHE/sitemap.txt" ]
+  [ ! -f "$TEST_CACHE/latest/docs.json" ]
 }
 
-@test "refresh removes sitemap.xml" {
-  echo "<xml/>" > "$TEST_CACHE/sitemap.xml"
-  run "$CACHE_SH" refresh
-  [ "$status" -eq 0 ]
-  [ ! -f "$TEST_CACHE/sitemap.xml" ]
-}
-
-@test "refresh succeeds even when no sitemap exists" {
+@test "refresh succeeds even when docs.json does not exist" {
   run "$CACHE_SH" refresh
   [ "$status" -eq 0 ]
 }
 
 # --- clear-docs ---
 
-@test "clear-docs removes doc_*.txt files" {
-  echo "content" > "$TEST_CACHE/doc_gateway_config.txt"
-  echo "content" > "$TEST_CACHE/doc_providers_discord.txt"
+@test "clear-docs removes doc_*.txt files from active version dir" {
+  mkdir -p "$TEST_CACHE/latest"
+  echo "content" > "$TEST_CACHE/latest/doc_gateway_config.txt"
+  echo "content" > "$TEST_CACHE/latest/doc_providers_discord.txt"
   run "$CACHE_SH" clear-docs
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_CACHE/doc_gateway_config.txt" ]
-  [ ! -f "$TEST_CACHE/doc_providers_discord.txt" ]
+  [ ! -f "$TEST_CACHE/latest/doc_gateway_config.txt" ]
+  [ ! -f "$TEST_CACHE/latest/doc_providers_discord.txt" ]
 }
 
-@test "clear-docs removes doc_*.html files" {
-  echo "<html/>" > "$TEST_CACHE/doc_gateway_config.html"
+@test "clear-docs removes doc_*.md files from active version dir" {
+  mkdir -p "$TEST_CACHE/latest"
+  echo "# Doc" > "$TEST_CACHE/latest/doc_gateway_config.md"
   run "$CACHE_SH" clear-docs
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_CACHE/doc_gateway_config.html" ]
+  [ ! -f "$TEST_CACHE/latest/doc_gateway_config.md" ]
 }
 
-@test "clear-docs removes index.txt" {
-  echo "path|content" > "$TEST_CACHE/index.txt"
+@test "clear-docs removes index.txt from active version dir" {
+  mkdir -p "$TEST_CACHE/latest"
+  echo "path|content" > "$TEST_CACHE/latest/index.txt"
   run "$CACHE_SH" clear-docs
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_CACHE/index.txt" ]
+  [ ! -f "$TEST_CACHE/latest/index.txt" ]
 }
 
-@test "clear-docs removes index_meta.json" {
-  echo '{"num_docs": 0}' > "$TEST_CACHE/index_meta.json"
+@test "clear-docs removes index_meta.json from active version dir" {
+  mkdir -p "$TEST_CACHE/latest"
+  echo '{"num_docs": 0}' > "$TEST_CACHE/latest/index_meta.json"
   run "$CACHE_SH" clear-docs
   [ "$status" -eq 0 ]
-  [ ! -f "$TEST_CACHE/index_meta.json" ]
+  [ ! -f "$TEST_CACHE/latest/index_meta.json" ]
 }
 
 @test "clear-docs succeeds on empty cache" {
@@ -120,4 +114,32 @@ teardown() {
 @test "unknown subcommand prints usage" {
   run "$CACHE_SH" doesnotexist
   [[ "$output" == *"Usage"* ]]
+}
+
+@test "status: lists version subdirectories with doc counts" {
+  mkdir -p "$TEST_CACHE/latest" "$TEST_CACHE/v2026.4.9"
+  touch "$TEST_CACHE/latest/doc_a.txt" "$TEST_CACHE/latest/doc_b.txt"
+  touch "$TEST_CACHE/v2026.4.9/doc_a.txt"
+  run "$REPO_ROOT/scripts/cache.sh" status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"latest"* ]]
+  [[ "$output" == *"v2026.4.9"* ]]
+  [[ "$output" == *"2"* ]]
+}
+
+@test "tags: prints message when source is local" {
+  export OPENCLAW_SAGE_SOURCE="local:/tmp/myrepo"
+  run "$REPO_ROOT/scripts/cache.sh" tags
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not available"* || "$output" == *"local"* ]]
+}
+
+@test "clear-docs: removes docs only from active version dir" {
+  mkdir -p "$TEST_CACHE/latest" "$TEST_CACHE/v2026.4.9"
+  touch "$TEST_CACHE/latest/doc_a.txt" "$TEST_CACHE/latest/index.txt"
+  touch "$TEST_CACHE/v2026.4.9/doc_a.txt"
+  run "$REPO_ROOT/scripts/cache.sh" clear-docs
+  [ "$status" -eq 0 ]
+  [ ! -f "$TEST_CACHE/latest/doc_a.txt" ]
+  [ -f "$TEST_CACHE/v2026.4.9/doc_a.txt" ]
 }
