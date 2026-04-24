@@ -2,7 +2,6 @@
 # Shared utilities for openclaw-sage scripts
 
 DOC_TTL="${OPENCLAW_SAGE_DOC_TTL:-86400}"           # 24hr default
-SITEMAP_TTL="${OPENCLAW_SAGE_SITEMAP_TTL:-3600}"    # 1hr default — kept for compatibility until sitemap.sh/cache.sh/recent.sh are updated in ENH-26
 LANGS="${OPENCLAW_SAGE_LANGS:-en}"                  # comma-separated lang codes, or "all"
 FETCH_JOBS="${OPENCLAW_SAGE_FETCH_JOBS:-8}"         # parallel fetch workers for build-index.sh fetch
 _LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

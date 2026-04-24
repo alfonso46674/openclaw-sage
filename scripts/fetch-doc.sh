@@ -53,7 +53,7 @@ _do_fetch() {
 # Ensure plain text is fresh
 if ! is_cache_fresh "$CACHE_FILE" "$DOC_TTL"; then
   if ! check_online; then
-    echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
+    echo "Offline: cannot reach GitHub" >&2
     if [ -f "$CACHE_FILE" ]; then
       echo "Using stale cached content for: $DOC_PATH" >&2
     else

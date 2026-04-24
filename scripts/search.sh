@@ -39,7 +39,6 @@ if [ -z "$KEYWORD" ]; then
   exit 1
 fi
 
-SITEMAP_CACHE="${CACHE_DIR}/sitemap.txt"
 INDEX_FILE="${VERSION_CACHE_DIR}/index.txt"
 
 # --- JSON output path ---
@@ -49,16 +48,15 @@ if $JSON; then
     exit 1
   fi
   python3 - "$INDEX_FILE" "$KEYWORD" "$DOCS_BASE_URL" \
-              "$SCRIPT_DIR/bm25_search.py" "$SITEMAP_CACHE" "$VERSION_CACHE_DIR" "$MAX_RESULTS" <<'PYEOF'
+              "$SCRIPT_DIR/bm25_search.py" "$VERSION_CACHE_DIR" "$MAX_RESULTS" <<'PYEOF'
 import sys, json, os, subprocess
 
 index_file    = sys.argv[1]
 keyword       = sys.argv[2]
 base_url      = sys.argv[3]
 bm25_script   = sys.argv[4]
-sitemap_cache = sys.argv[5]
-cache_dir     = sys.argv[6]
-max_results   = int(sys.argv[7])
+cache_dir     = sys.argv[5]
+max_results   = int(sys.argv[6])
 
 results = []
 mode = None
@@ -105,25 +103,11 @@ elif any(f.startswith('doc_') and f.endswith('.txt')
             pass
     mode = 'grep'
 
-# 3. Sitemap path matches
-sitemap_matches = []
-if os.path.exists(sitemap_cache):
-    kw = keyword.lower()
-    with open(sitemap_cache) as f:
-        for line in f:
-            if len(sitemap_matches) >= max_results:
-                break
-            if kw in line.lower() and line.strip().startswith('-'):
-                path = line.strip().lstrip('- ').strip()
-                sitemap_matches.append({'path': path, 'url': f'{base_url}/{path}'})
-
 out = {
     'query': keyword,
-    'mode': mode or 'sitemap-only',
+    'mode': mode or 'no-cache',
     'results': results,
 }
-if sitemap_matches:
-    out['sitemap_matches'] = sitemap_matches
 
 print(json.dumps(out, indent=2))
 PYEOF
@@ -183,15 +167,6 @@ elif ls "$VERSION_CACHE_DIR"/doc_*.txt &>/dev/null 2>&1; then
   found=1
 fi
 
-# Sitemap path matches
-if [ -f "$SITEMAP_CACHE" ]; then
-  matches=$(grep -i "$KEYWORD" "$SITEMAP_CACHE" | grep '^\s*-')
-  if [ -n "$matches" ]; then
-    echo "=== Matching doc paths ==="
-    echo "$matches" | head -"$MAX_RESULTS" | sed 's/^[[:space:]]*/  /'
-    echo ""
-  fi
-fi
 
 if [ "$found" -eq 0 ]; then
   echo "No cached content to search. Options:"
