@@ -15,40 +15,6 @@ teardown() {
   rm -rf "$TEST_CACHE"
 }
 
-# --- fetch_text ---
-
-@test "fetch_text strips multiline script/style blocks and page chrome from plain text" {
-  cat > "$TEST_CACHE/noisy.html" <<'HTML'
-<html>
-  <body>
-    <header>Header links</header>
-    <nav>Docs nav</nav>
-    <main>
-      <h1>Guide Title</h1>
-      <p>Useful body text.</p>
-      <script>
-        const shouldNotAppear = "script noise";
-      </script>
-      <style>
-        .hidden { display: none; }
-      </style>
-    </main>
-    <footer>Footer links</footer>
-  </body>
-</html>
-HTML
-
-  run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' source '$REPO_ROOT/scripts/lib.sh'; fetch_text 'file://$TEST_CACHE/noisy.html'"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Guide Title"* ]]
-  [[ "$output" == *"Useful body text."* ]]
-  [[ "$output" != *"Header links"* ]]
-  [[ "$output" != *"Docs nav"* ]]
-  [[ "$output" != *"Footer links"* ]]
-  [[ "$output" != *"shouldNotAppear"* ]]
-  [[ "$output" != *"display: none"* ]]
-}
-
 # --- is_cache_fresh ---
 
 @test "get_mtime: returns 1 for missing file" {
@@ -99,11 +65,6 @@ HTML
   [[ "$DOCS_BASE_URL" == https://* ]]
 }
 
-@test "SITEMAP_TTL is a positive integer" {
-  [[ "$SITEMAP_TTL" =~ ^[0-9]+$ ]]
-  [ "$SITEMAP_TTL" -gt 0 ]
-}
-
 @test "DOC_TTL is a positive integer" {
   [[ "$DOC_TTL" =~ ^[0-9]+$ ]]
   [ "$DOC_TTL" -gt 0 ]
@@ -112,11 +73,6 @@ HTML
 @test "FETCH_JOBS is a positive integer" {
   [[ "$FETCH_JOBS" =~ ^[0-9]+$ ]]
   [ "$FETCH_JOBS" -gt 0 ]
-}
-
-@test "SITEMAP_TTL can be overridden via env var" {
-  OPENCLAW_SAGE_SITEMAP_TTL=999 source "$REPO_ROOT/scripts/lib.sh"
-  [ "$SITEMAP_TTL" -eq 999 ]
 }
 
 @test "DOC_TTL can be overridden via env var" {
@@ -135,4 +91,144 @@ HTML
   OPENCLAW_SAGE_CACHE_DIR="$NEW_CACHE" source "$REPO_ROOT/scripts/lib.sh"
   [ -d "$NEW_CACHE" ]
   rm -rf "$NEW_CACHE"
+}
+
+# --- clean_markdown ---
+
+@test "clean_markdown: strips YAML frontmatter" {
+  cat > "$TEST_CACHE/input.md" <<'MD'
+---
+title: "My Doc"
+summary: "A summary"
+---
+# Real content
+MD
+  source "$REPO_ROOT/scripts/lib.sh"
+  clean_markdown "$TEST_CACHE/input.md" "$TEST_CACHE/output.txt"
+  [ -f "$TEST_CACHE/output.txt" ]
+  run cat "$TEST_CACHE/output.txt"
+  [[ "$output" == *"Real content"* ]]
+  [[ "$output" != *"title:"* ]]
+  [[ "$output" != *"---"* ]]
+}
+
+@test "clean_markdown: strips self-closing MDX tags" {
+  cat > "$TEST_CACHE/input.md" <<'MD'
+Some text <Icon name="star" /> more text
+MD
+  source "$REPO_ROOT/scripts/lib.sh"
+  clean_markdown "$TEST_CACHE/input.md" "$TEST_CACHE/output.txt"
+  run cat "$TEST_CACHE/output.txt"
+  [[ "$output" == *"Some text"* ]]
+  [[ "$output" == *"more text"* ]]
+  [[ "$output" != *"<Icon"* ]]
+}
+
+@test "clean_markdown: strips paired MDX tags, keeps inner text" {
+  cat > "$TEST_CACHE/input.md" <<'MD'
+<Tip>
+Important advice here.
+</Tip>
+MD
+  source "$REPO_ROOT/scripts/lib.sh"
+  clean_markdown "$TEST_CACHE/input.md" "$TEST_CACHE/output.txt"
+  run cat "$TEST_CACHE/output.txt"
+  [[ "$output" == *"Important advice here."* ]]
+  [[ "$output" != *"<Tip>"* ]]
+}
+
+@test "clean_markdown: prepends title and summary from frontmatter" {
+  cat > "$TEST_CACHE/input.md" <<'MD'
+---
+title: "Gateway Config"
+summary: "Configure the gateway"
+---
+# Heading
+MD
+  source "$REPO_ROOT/scripts/lib.sh"
+  clean_markdown "$TEST_CACHE/input.md" "$TEST_CACHE/output.txt"
+  run cat "$TEST_CACHE/output.txt"
+  [[ "$output" == *"Gateway Config"* ]]
+  [[ "$output" == *"Configure the gateway"* ]]
+}
+
+@test "clean_markdown: preserves fenced code blocks untouched" {
+  cat > "$TEST_CACHE/input.md" <<'MD'
+Before code.
+```json
+{ "key": "<Value>" }
+```
+After code.
+MD
+  source "$REPO_ROOT/scripts/lib.sh"
+  clean_markdown "$TEST_CACHE/input.md" "$TEST_CACHE/output.txt"
+  run cat "$TEST_CACHE/output.txt"
+  [[ "$output" == *'"key": "<Value>"'* ]]
+}
+
+# --- resolve_source ---
+
+@test "resolve_source: github mode returns raw.githubusercontent.com URL" {
+  export OPENCLAW_SAGE_SOURCE="github"
+  source "$REPO_ROOT/scripts/lib.sh"
+  result=$(resolve_source "gateway/configuration" "main")
+  [[ "$result" == "https://raw.githubusercontent.com/openclaw/openclaw/main/docs/gateway/configuration.md" ]]
+}
+
+@test "resolve_source: github mode uses tag ref when provided" {
+  export OPENCLAW_SAGE_SOURCE="github"
+  source "$REPO_ROOT/scripts/lib.sh"
+  result=$(resolve_source "gateway/configuration" "v2026.4.9")
+  [[ "$result" == "https://raw.githubusercontent.com/openclaw/openclaw/v2026.4.9/docs/gateway/configuration.md" ]]
+}
+
+@test "resolve_source: local mode returns filesystem path" {
+  export OPENCLAW_SAGE_SOURCE="local:/tmp/myrepo/docs"
+  source "$REPO_ROOT/scripts/lib.sh"
+  result=$(resolve_source "gateway/configuration" "")
+  [[ "$result" == "/tmp/myrepo/docs/gateway/configuration.md" ]]
+}
+
+# --- fetch_markdown ---
+
+@test "fetch_markdown: fetches local file and writes .md and .txt" {
+  cat > "$TEST_CACHE/source.md" <<'MD'
+---
+title: "Test Doc"
+---
+# Test heading
+Some content.
+MD
+  export OPENCLAW_SAGE_SOURCE="local:$TEST_CACHE"
+  export OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE"
+  source "$REPO_ROOT/scripts/lib.sh"
+  VERSION_CACHE_DIR="$TEST_CACHE/latest"
+  mkdir -p "$VERSION_CACHE_DIR"
+  fetch_markdown "source" "latest"
+  [ -f "$VERSION_CACHE_DIR/doc_source.md" ]
+  [ -f "$VERSION_CACHE_DIR/doc_source.txt" ]
+}
+
+# --- parse_version_flag ---
+
+@test "parse_version_flag: sets VERSION to latest when no --version given" {
+  source "$REPO_ROOT/scripts/lib.sh"
+  parse_version_flag   # no args
+  [[ "$VERSION" == "latest" ]]
+  [[ "$VERSION_CACHE_DIR" == "$CACHE_DIR/latest" ]]
+}
+
+@test "parse_version_flag: sets VERSION from --version flag" {
+  source "$REPO_ROOT/scripts/lib.sh"
+  parse_version_flag --version v2026.4.9
+  [[ "$VERSION" == "v2026.4.9" ]]
+  [[ "$VERSION_CACHE_DIR" == "$CACHE_DIR/v2026.4.9" ]]
+}
+
+@test "parse_version_flag: trailing args after --version are preserved in REMAINING_ARGS" {
+  source "$REPO_ROOT/scripts/lib.sh"
+  parse_version_flag --version v2026.4.9 gateway/configuration --toc
+  [[ "$VERSION" == "v2026.4.9" ]]
+  [[ "${REMAINING_ARGS[0]}" == "gateway/configuration" ]]
+  [[ "${REMAINING_ARGS[1]}" == "--toc" ]]
 }
