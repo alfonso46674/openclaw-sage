@@ -3,116 +3,114 @@
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
-INDEX_FILE="${CACHE_DIR}/index.txt"
-SITEMAP_XML="${CACHE_DIR}/sitemap.xml"
-
 case "$1" in
   fetch)
+    shift
+    parse_version_flag "$@"
+    REF="$VERSION"
+    [ "$VERSION" = "latest" ] && REF="main"
+
     echo "Downloading all docs..."
 
-    if ! check_online; then
-      echo "Offline: cannot reach ${DOCS_BASE_URL}" >&2
-      echo "fetch requires network access. Run build-index.sh status to see cached docs." >&2
-      exit 1
-    fi
+    DOCS_JSON_CACHE="${VERSION_CACHE_DIR}/docs.json"
 
-    # Ensure sitemap XML is available
-    if [ ! -f "$SITEMAP_XML" ]; then
-      echo "Fetching sitemap first..." >&2
-      if ! curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$SITEMAP_XML" 2>/dev/null; then
-        echo "Error: failed to fetch sitemap (network unreachable?)" >&2
-        exit 1
+    # Fetch docs.json if not cached or stale
+    if ! is_cache_fresh "$DOCS_JSON_CACHE" "$DOC_TTL"; then
+      if [[ "$SOURCE" == local:* ]]; then
+        local_path="${SOURCE#local:}"
+        if [ ! -f "${local_path}/docs.json" ]; then
+          echo "Error: docs.json not found at ${local_path}/docs.json" >&2
+          exit 1
+        fi
+        cp "${local_path}/docs.json" "$DOCS_JSON_CACHE"
+      else
+        if ! check_online; then
+          echo "Offline: cannot reach GitHub" >&2
+          exit 1
+        fi
+        src_url="$(resolve_source_raw "docs.json" "$REF")"
+        if ! curl -sf --max-time 10 "$src_url" -o "$DOCS_JSON_CACHE" 2>/dev/null; then
+          echo "Error: failed to fetch docs.json" >&2
+          exit 1
+        fi
       fi
     fi
 
-    ALL_URLS=$(grep -o '<loc>[^<]*</loc>' "$SITEMAP_XML" 2>/dev/null | sed 's/<[^>]*>//g' | grep "${DOCS_BASE_URL}/" | grep -v "^${DOCS_BASE_URL}/$")
+    # Extract all doc paths from docs.json navigation tree
+    PATHS=$(python3 - "$DOCS_JSON_CACHE" <<'PYEOF'
+import sys, json
 
-    # Show available languages in the sitemap
-    # Language prefix format: "ll/" or "ll-RR/" (e.g. zh-CN/, pt-BR/)
-    available_langs=$(echo "$ALL_URLS" | awk -v base_url="$DOCS_BASE_URL" '
-      {
-        path = $0
-        sub(base_url "/", "", path)
-        if (match(path, /^[a-z][a-z](-[A-Za-z]+)?\//))
-          lang = substr(path, 1, RLENGTH - 1)
-        else
-          lang = "en"
-        langs[lang]++
-      }
-      END { for (l in langs) printf "%s (%d docs)  ", l, langs[l]; print "" }
-    ')
-    echo "Languages in sitemap: $available_langs" >&2
-    echo "Fetching language(s): $LANGS  (override with OPENCLAW_SAGE_LANGS=en,zh or =all)" >&2
+def collect_pages(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, list):
+        for item in node:
+            yield from collect_pages(item)
+    elif isinstance(node, dict):
+        if 'pages' in node:
+            yield from collect_pages(node['pages'])
+        else:
+            for v in node.values():
+                yield from collect_pages(v)
 
-    # Filter URLs by language.
-    # LANGS is matched against the base 2-letter code so "zh" catches "zh-CN", "zh-TW", etc.
-    if [ "$LANGS" = "all" ]; then
-      URLS="$ALL_URLS"
-    else
-      URLS=$(echo "$ALL_URLS" | awk -v langs=",$LANGS," -v base_url="$DOCS_BASE_URL" '
-        {
-          url = $0
-          sub(base_url "/", "", url)
-          if (match(url, /^[a-z][a-z](-[A-Za-z]+)?\//))
-            lang = substr(url, 1, 2)   # base code only: "zh-CN" → "zh"
-          else
-            lang = "en"
-          if (index(langs, "," lang ",") > 0) print $0
-        }
-      ')
-    fi
+with open(sys.argv[1]) as f:
+    data = json.load(f)
 
-    if [ -z "$URLS" ]; then
-      echo "Error: Could not get URL list from sitemap. Run ./scripts/sitemap.sh first." >&2
+paths = sorted(set(
+    p for p in collect_pages(data.get('navigation', {}))
+    if isinstance(p, str) and '/' in p
+))
+for p in paths:
+    print(p)
+PYEOF
+)
+
+    if [ -z "$PATHS" ]; then
+      echo "Error: Could not extract doc paths from docs.json" >&2
       exit 1
     fi
 
-    total=$(printf '%s\n' "$URLS" | wc -l)
+    total=$(printf '%s\n' "$PATHS" | wc -l)
     fetch_jobs="$FETCH_JOBS"
     if ! [[ "$fetch_jobs" =~ ^[0-9]+$ ]] || [ "$fetch_jobs" -le 0 ]; then
       fetch_jobs=8
     fi
     new=0
     fetch_sequential() {
-      while IFS= read -r url; do
-        path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
+      while IFS= read -r path; do
         [ -z "$path" ] && continue
-        cache_file="${CACHE_DIR}/doc_$(echo "$path" | tr '/' '_').txt"
-        if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
-          safe="$(echo "$path" | tr '/' '_')"
-          if fetch_and_cache "$url" "$safe"; then
+        safe=$(echo "$path" | tr "/" "_")
+        txt_file="${VERSION_CACHE_DIR}/doc_${safe}.txt"
+        if [ ! -f "$txt_file" ] || ! is_cache_fresh "$txt_file" "$DOC_TTL"; then
+          if fetch_markdown "$safe" "$REF"; then
             new=$((new + 1))
             echo "  [done] $path" >&2
           fi
           sleep 0.3
         fi
-      done <<< "$URLS"
+      done <<< "$PATHS"
     }
 
     if command -v xargs &>/dev/null; then
       MARKER_DIR=$(mktemp -d)
       trap 'rm -rf "$MARKER_DIR"' EXIT
-      export OPENCLAW_SAGE_CACHE_DIR OPENCLAW_SAGE_DOCS_BASE_URL OPENCLAW_SAGE_DOC_TTL OPENCLAW_SAGE_LANGS
-      export LIB_SH="$SCRIPT_DIR/lib.sh" MARKER_DIR
+      export OPENCLAW_SAGE_CACHE_DIR OPENCLAW_SAGE_SOURCE OPENCLAW_SAGE_DOC_TTL OPENCLAW_SAGE_LANGS
+      export LIB_SH="$SCRIPT_DIR/lib.sh" MARKER_DIR VERSION_CACHE_DIR REF
 
-      if printf '%s\n' "$URLS" \
-        | tr '\n' '\0' \
-        | xargs -0 -n 1 -P "$fetch_jobs" bash -c '
-            source "$LIB_SH"
-            url="$1"
-            [ -z "$url" ] && exit 0
-            path=$(echo "$url" | sed "s|${DOCS_BASE_URL}/||")
-            [ -z "$path" ] && exit 0
-            safe=$(echo "$path" | tr "/" "_")
-            cache_file="${CACHE_DIR}/doc_${safe}.txt"
-            if [ ! -f "$cache_file" ] || ! is_cache_fresh "$cache_file" "$DOC_TTL"; then
-              if fetch_and_cache "$url" "$safe"; then
-                touch "${MARKER_DIR}/${safe}"
-                echo "  [done] $path" >&2
-              fi
-              sleep 0.3
+      if echo "$PATHS" | tr '\n' '\0' | xargs -0 -n 1 -P "$fetch_jobs" bash -c '
+          source "$LIB_SH"
+          path="$1"
+          [ -z "$path" ] && exit 0
+          safe=$(echo "$path" | tr "/" "_")
+          txt_file="${VERSION_CACHE_DIR}/doc_${safe}.txt"
+          if [ ! -f "$txt_file" ] || ! is_cache_fresh "$txt_file" "$DOC_TTL"; then
+            if fetch_markdown "$safe" "$REF"; then
+              touch "${MARKER_DIR}/${safe}"
+              echo "  [done] $path" >&2
             fi
-          ' --; then
+            sleep 0.3
+          fi
+        ' --; then
         set -- "$MARKER_DIR"/*
         if [ -e "$1" ]; then
           new=$#
@@ -129,19 +127,23 @@ case "$1" in
       fetch_sequential
     fi
 
-    cached=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
+    cached=$(ls "$VERSION_CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
     echo "Done. $new new docs fetched, $cached total cached."
     echo "Next: run './scripts/build-index.sh build' to index them."
     ;;
 
   build)
+    shift
+    parse_version_flag "$@"
+    INDEX_FILE="${VERSION_CACHE_DIR}/index.txt"
+    META_FILE="${VERSION_CACHE_DIR}/index_meta.json"
+
     echo "Building search index..."
-    if ! ls "$CACHE_DIR"/doc_*.txt &>/dev/null 2>&1; then
+    if ! ls "$VERSION_CACHE_DIR"/doc_*.txt &>/dev/null 2>&1; then
       echo "No docs cached. Run: ./scripts/build-index.sh fetch first."
       exit 1
     fi
 
-    META_FILE="${CACHE_DIR}/index_meta.json"
     TMP_INDEX=$(mktemp)
     CURRENT_PATHS=$(mktemp)
     CHANGED_PATHS=$(mktemp)
@@ -165,7 +167,7 @@ case "$1" in
       index_mtime=$(get_mtime "$INDEX_FILE")
     fi
 
-    for f in "$CACHE_DIR"/doc_*.txt; do
+    for f in "$VERSION_CACHE_DIR"/doc_*.txt; do
       path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
       echo "$path" >> "$CURRENT_PATHS"
       doc_count=$((doc_count + 1))
@@ -199,7 +201,7 @@ case "$1" in
         ' "$UNCHANGED_PATHS" "$INDEX_FILE" >> "$TMP_INDEX"
       fi
 
-      for f in "$CACHE_DIR"/doc_*.txt; do
+      for f in "$VERSION_CACHE_DIR"/doc_*.txt; do
         path=$(basename "$f" .txt | sed 's/^doc_//; s/_/\//g')
         if ! $index_exists || grep -Fxq "$path" "$CHANGED_PATHS"; then
           append_doc_lines "$f" "$TMP_INDEX"
@@ -225,6 +227,10 @@ case "$1" in
 
   search)
     shift
+    parse_version_flag "$@"
+    set -- "${REMAINING_ARGS[@]}"
+    INDEX_FILE="${VERSION_CACHE_DIR}/index.txt"
+
     MAX_RESULTS=10
     QUERY_ARGS=()
     while [ $# -gt 0 ]; do
@@ -297,12 +303,14 @@ case "$1" in
     ;;
 
   status)
-    doc_count=$(ls "$CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
+    parse_version_flag "$@"
+    doc_count=$(ls "$VERSION_CACHE_DIR"/doc_*.txt 2>/dev/null | wc -l)
+    INDEX_FILE="${VERSION_CACHE_DIR}/index.txt"
     echo "Cached docs: $doc_count"
     if [ -f "$INDEX_FILE" ]; then
       line_count=$(wc -l < "$INDEX_FILE")
       echo "Index:       $line_count lines  ($INDEX_FILE)"
-      META_FILE="${CACHE_DIR}/index_meta.json"
+      META_FILE="${VERSION_CACHE_DIR}/index_meta.json"
       if [ -f "$META_FILE" ]; then
         echo "BM25 meta:   present"
       else
