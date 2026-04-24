@@ -1,10 +1,10 @@
 #!/usr/bin/env bats
 # Tests for scripts/track-changes.sh
 #
-# BUG-06 note: get_current_pages TTL and no-corruption behavior is verified
-# by code review (temp-file + mv pattern) and the offline exit tests below.
-# Full integration tests (fresh sitemap → no re-fetch) require network access
-# and are not suitable for offline CI runs.
+# get_current_pages now reads paths from docs.json (not sitemap.xml).
+# Tests that previously seeded sitemap.xml now seed docs.json instead.
+# Snapshots live in $VERSION_CACHE_DIR/snapshots (= $CACHE_DIR/local/snapshots
+# when using local source).
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 TRACK_SH="$REPO_ROOT/scripts/track-changes.sh"
@@ -13,10 +13,13 @@ setup() {
   export TEST_CACHE
   TEST_CACHE="$(mktemp -d)"
   export OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE"
-  export TEST_BIN
-  TEST_BIN="$TEST_CACHE/bin"
-  mkdir -p "$TEST_BIN"
-  mkdir -p "$TEST_CACHE/snapshots"
+  # Use local source so check_online passes without network
+  export TEST_SRC="$TEST_CACHE/src"
+  mkdir -p "$TEST_SRC"
+  export OPENCLAW_SAGE_SOURCE="local:$TEST_SRC"
+  # VERSION_CACHE_DIR will be $TEST_CACHE/local (local source → VERSION=local)
+  export TEST_VERSION_CACHE="$TEST_CACHE/local"
+  mkdir -p "$TEST_VERSION_CACHE/snapshots"
 }
 
 teardown() {
@@ -28,7 +31,24 @@ _seed_snapshot() {
   # comm requires sorted input — sort here to match what get_current_pages produces
   local name="$1"
   shift
-  printf '%s\n' "$@" | sort > "$TEST_CACHE/snapshots/${name}.txt"
+  printf '%s\n' "$@" | sort > "$TEST_VERSION_CACHE/snapshots/${name}.txt"
+}
+
+# Seed a docs.json in the version cache dir with the given paths
+_seed_docs_json() {
+  local pages_json=""
+  for p in "$@"; do
+    pages_json+="\"$p\","
+  done
+  # trim trailing comma
+  pages_json="${pages_json%,}"
+  cat > "$TEST_VERSION_CACHE/docs.json" <<JSON
+{
+  "navigation": {
+    "pages": [$pages_json]
+  }
+}
+JSON
 }
 
 # --- Argument validation ---
@@ -139,10 +159,10 @@ _seed_snapshot() {
 }
 
 @test "since: exits 1 with offline message when host unreachable (BUG-06 regression)" {
-  # Verifies that when network is unavailable, since exits cleanly with a clear
-  # message rather than hanging or corrupting the cached sitemap.xml.
+  # Verifies that when source is unavailable, since exits cleanly with a clear message.
+  # Use local source pointing at a non-existent directory so check_online returns 1.
   _seed_snapshot "20260101_000000" "providers/discord"
-  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='http://127.0.0.1:1' \
+  run bash -c "OPENCLAW_SAGE_SOURCE='local:/nonexistent' \
                OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
                '$TRACK_SH' since 2026-01-01 2>&1"
   [ "$status" -eq 1 ]
@@ -153,29 +173,12 @@ _seed_snapshot() {
   _seed_snapshot "20260101_000000" "providers/discord"
   _seed_snapshot "20260201_000000" "providers/discord" "providers/telegram"
 
-  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
-  <url><loc>https://docs.openclaw.ai/providers/telegram</loc></url>
-</urlset>
-XML
+  # Seed docs.json so get_current_pages can read paths
+  _seed_docs_json "providers/discord" "providers/telegram"
 
-  cat > "$TEST_BIN/curl" <<'EOF'
-#!/bin/bash
-for arg in "$@"; do
-  if [ "$arg" = "-I" ]; then
-    exit 0
-  fi
-done
-exit 7
-EOF
-  chmod +x "$TEST_BIN/curl"
-
-  run env PATH="$TEST_BIN:$PATH" \
-    OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
-    OPENCLAW_SAGE_SITEMAP_TTL=999999 \
-    "$TRACK_SH" since 2025-01-01
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+      OPENCLAW_SAGE_SOURCE="local:$TEST_SRC" \
+      "$TRACK_SH" since 2025-01-01
   [ "$status" -eq 0 ]
   [[ "$output" == *"oldest snapshot (20260101_000000)"* ]]
   [[ "$output" == *"+ providers/telegram"* ]]
@@ -184,7 +187,8 @@ EOF
 # --- snapshot ---
 
 @test "snapshot: exits 1 with offline message when host unreachable" {
-  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='http://127.0.0.1:1' \
+  # Use local source pointing at a non-existent directory so check_online returns 1.
+  run bash -c "OPENCLAW_SAGE_SOURCE='local:/nonexistent' \
                OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
                '$TRACK_SH' snapshot 2>&1"
   [ "$status" -eq 1 ]
@@ -192,12 +196,12 @@ EOF
 }
 
 @test "snapshot: does not create snapshot file when offline" {
-  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='http://127.0.0.1:1' \
+  run bash -c "OPENCLAW_SAGE_SOURCE='local:/nonexistent' \
                OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' \
                '$TRACK_SH' snapshot 2>&1"
   [ "$status" -eq 1 ]
   # No snapshot files should have been created
   local count
-  count=$(find "$TEST_CACHE/snapshots" -name "*.txt" | wc -l)
+  count=$(find "$TEST_CACHE" -name "*.txt" -path "*/snapshots/*" | wc -l)
   [ "$count" -eq 0 ]
 }

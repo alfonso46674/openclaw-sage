@@ -1,30 +1,48 @@
 #!/bin/bash
-# Track changes to documentation by diffing sitemap snapshots
+# Track changes to documentation by diffing page-list snapshots
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 source "$SCRIPT_DIR/lib.sh"
 
-SNAPSHOTS_DIR="${CACHE_DIR}/snapshots"
+parse_version_flag "$@"
+set -- "${REMAINING_ARGS[@]}"
+
+SNAPSHOTS_DIR="${VERSION_CACHE_DIR}/snapshots"
 
 mkdir -p "$SNAPSHOTS_DIR"
 
 get_current_pages() {
-  local sitemap_xml="${CACHE_DIR}/sitemap.xml"
-  if ! is_cache_fresh "$sitemap_xml" "$SITEMAP_TTL"; then
-    local tmp
-    tmp=$(mktemp)
-    if curl -sf --max-time 10 "${DOCS_BASE_URL}/sitemap.xml" -o "$tmp" 2>/dev/null \
-        && [ -s "$tmp" ]; then
-      mv "$tmp" "$sitemap_xml"
-    else
-      rm -f "$tmp"
-    fi
+  local docs_json="${VERSION_CACHE_DIR}/docs.json"
+  if [ ! -f "$docs_json" ]; then
+    echo "Error: docs.json not found at ${docs_json}" >&2
+    echo "Run: ./scripts/build-index.sh fetch first." >&2
+    return 1
   fi
-  grep -o '<loc>[^<]*</loc>' "$sitemap_xml" 2>/dev/null \
-    | sed 's/<[^>]*>//g' \
-    | grep "docs\.openclaw\.ai/" \
-    | sed "s|${DOCS_BASE_URL}/||" \
-    | grep -v '^$' \
-    | sort
+  python3 - "$docs_json" <<'PYEOF'
+import sys, json
+
+def collect_pages(node):
+    if isinstance(node, str):
+        yield node
+    elif isinstance(node, list):
+        for item in node:
+            yield from collect_pages(item)
+    elif isinstance(node, dict):
+        if 'pages' in node:
+            yield from collect_pages(node['pages'])
+        else:
+            for v in node.values():
+                yield from collect_pages(v)
+
+with open(sys.argv[1]) as f:
+    data = json.load(f)
+
+paths = sorted(set(
+    p for p in collect_pages(data.get('navigation', {}))
+    if isinstance(p, str) and '/' in p
+))
+for p in paths:
+    print(p)
+PYEOF
 }
 
 case "$1" in
@@ -41,7 +59,7 @@ case "$1" in
     COUNT=$(wc -l < "$SNAPSHOT_FILE")
     if [ "$COUNT" -eq 0 ]; then
       rm -f "$SNAPSHOT_FILE"
-      echo "Error: Could not fetch sitemap. Snapshot not saved."
+      echo "Error: Could not fetch doc list. Snapshot not saved."
       exit 1
     fi
     echo "Snapshot saved: ${TIMESTAMP}  ($COUNT pages)"

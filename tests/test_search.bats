@@ -8,6 +8,9 @@ setup() {
   export TEST_CACHE
   TEST_CACHE="$(mktemp -d)"
   export OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE"
+  # Default version is "latest"; seed docs/index into the versioned subdir
+  export TEST_VERSION_CACHE="$TEST_CACHE/latest"
+  mkdir -p "$TEST_VERSION_CACHE"
 }
 
 teardown() {
@@ -68,29 +71,29 @@ teardown() {
 # --- Match in cached doc ---
 
 @test "finds keyword in seeded cached doc" {
-  echo "webhook retry configuration guide" > "$TEST_CACHE/doc_automation_webhook.txt"
+  echo "webhook retry configuration guide" > "$TEST_VERSION_CACHE/doc_automation_webhook.txt"
   run "$SEARCH_SH" webhook
   [ "$status" -eq 0 ]
   [[ "$output" == *"automation/webhook"* ]]
 }
 
 @test "multi-word query finds doc containing both words" {
-  echo "webhook retry configuration guide" > "$TEST_CACHE/doc_automation_webhook.txt"
+  echo "webhook retry configuration guide" > "$TEST_VERSION_CACHE/doc_automation_webhook.txt"
   run "$SEARCH_SH" webhook retry
   [ "$status" -eq 0 ]
   [[ "$output" == *"automation/webhook"* ]]
 }
 
 @test "--json finds match in seeded doc" {
-  echo "discord bot token setup" > "$TEST_CACHE/doc_providers_discord.txt"
+  echo "discord bot token setup" > "$TEST_VERSION_CACHE/doc_providers_discord.txt"
   run "$SEARCH_SH" --json discord
   [ "$status" -eq 0 ]
   [[ "$output" == *"providers/discord"* ]]
 }
 
 @test "--max-results limits cached-doc fallback matches" {
-  echo "webhook retry configuration guide" > "$TEST_CACHE/doc_automation_webhook.txt"
-  echo "webhook setup notes" > "$TEST_CACHE/doc_gateway_webhook.txt"
+  echo "webhook retry configuration guide" > "$TEST_VERSION_CACHE/doc_automation_webhook.txt"
+  echo "webhook setup notes" > "$TEST_VERSION_CACHE/doc_gateway_webhook.txt"
   run "$SEARCH_SH" --max-results 1 webhook
   [ "$status" -eq 0 ]
   [[ "$output" == *"automation/webhook"* ]]
@@ -112,7 +115,7 @@ teardown() {
 @test "search output uses OPENCLAW_SAGE_DOCS_BASE_URL not a hardcoded URL (BUG-01 regression)" {
   # With an index and python3, the human BM25 path formats URLs using $DOCS_BASE_URL.
   # This catches any regression where the URL is hardcoded again.
-  printf 'test/page|line containing searchkeyword here\n' > "$TEST_CACHE/index.txt"
+  printf 'test/page|line containing searchkeyword here\n' > "$TEST_VERSION_CACHE/index.txt"
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
@@ -123,7 +126,7 @@ teardown() {
 }
 
 @test "--max-results limits BM25 human output" {
-  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_CACHE/index.txt"
+  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_VERSION_CACHE/index.txt"
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
@@ -136,14 +139,14 @@ teardown() {
 # --- BUG-19 regression: diagnostic tip must not appear on stdout ---
 
 @test "BUG-19: Tip text does not appear on stdout" {
-  echo "webhook retry guide" > "$TEST_CACHE/doc_automation_webhook.txt"
+  echo "webhook retry guide" > "$TEST_VERSION_CACHE/doc_automation_webhook.txt"
   run bash -c "OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' '$SEARCH_SH' webhook 2>/dev/null"
   [ "$status" -eq 0 ]
   [[ "$output" != *"Tip:"* ]]
 }
 
 @test "--json search output uses OPENCLAW_SAGE_DOCS_BASE_URL (BUG-01 regression)" {
-  printf 'test/page|line containing searchkeyword here\n' > "$TEST_CACHE/index.txt"
+  printf 'test/page|line containing searchkeyword here\n' > "$TEST_VERSION_CACHE/index.txt"
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
@@ -154,7 +157,7 @@ teardown() {
 }
 
 @test "--json max-results limits BM25 result count" {
-  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_CACHE/index.txt"
+  printf 'alpha/doc|searchkeyword searchkeyword searchkeyword\nbeta/doc|searchkeyword\n' > "$TEST_VERSION_CACHE/index.txt"
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
@@ -162,4 +165,15 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *'"alpha/doc"'* ]]
   [[ "$output" != *'"beta/doc"'* ]]
+}
+
+@test "search --version: searches index in versioned cache dir" {
+  mkdir -p "$TEST_CACHE/v2026.4.9"
+  echo "gateway/configuration|Configure retry settings" > "$TEST_CACHE/v2026.4.9/index.txt"
+  # Use github source so --version is respected (local source always uses "local" as version)
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+          OPENCLAW_SAGE_SOURCE="github" \
+          "$REPO_ROOT/scripts/search.sh" --version v2026.4.9 retry
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gateway/configuration"* ]]
 }
