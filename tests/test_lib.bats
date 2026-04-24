@@ -225,6 +225,14 @@ MD
   [[ "$VERSION_CACHE_DIR" == "$CACHE_DIR/v2026.4.9" ]]
 }
 
+@test "parse_version_flag: VERSION is 'local' when SOURCE is local:*" {
+  export OPENCLAW_SAGE_SOURCE="local:/tmp/docs"
+  source "$REPO_ROOT/scripts/lib.sh"
+  parse_version_flag --version v2026.4.9
+  [[ "$VERSION" == "local" ]]
+  [[ "$VERSION_CACHE_DIR" == "$CACHE_DIR/local" ]]
+}
+
 @test "parse_version_flag: trailing args after --version are preserved in REMAINING_ARGS" {
   source "$REPO_ROOT/scripts/lib.sh"
   parse_version_flag --version v2026.4.9 gateway/configuration --toc
