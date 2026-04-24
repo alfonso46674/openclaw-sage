@@ -53,14 +53,16 @@ teardown() {
 # --- Cached .txt only ---
 
 @test "cached txt-only path exits 0 and shows word count" {
-  printf 'word1 word2 word3 word4 word5\n' > "$TEST_CACHE/doc_gateway_configuration.txt"
+  mkdir -p "$TEST_CACHE/latest"
+  printf 'word1 word2 word3 word4 word5\n' > "$TEST_CACHE/latest/doc_gateway_configuration.txt"
   run "$INFO_SH" gateway/configuration
   [ "$status" -eq 0 ]
   [[ "$output" == *"words:"* ]]
 }
 
 @test "cached txt-only path shows url" {
-  printf 'some content here\n' > "$TEST_CACHE/doc_gateway_configuration.txt"
+  mkdir -p "$TEST_CACHE/latest"
+  printf 'some content here\n' > "$TEST_CACHE/latest/doc_gateway_configuration.txt"
   run "$INFO_SH" gateway/configuration
   [ "$status" -eq 0 ]
   [[ "$output" == *"url:"* ]]
@@ -68,7 +70,8 @@ teardown() {
 }
 
 @test "cached txt-only path with --json returns word_count field" {
-  printf 'one two three\n' > "$TEST_CACHE/doc_gateway_configuration.txt"
+  mkdir -p "$TEST_CACHE/latest"
+  printf 'one two three\n' > "$TEST_CACHE/latest/doc_gateway_configuration.txt"
   run "$INFO_SH" gateway/configuration --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"word_count"'* ]]
@@ -77,29 +80,68 @@ teardown() {
   [[ "$output" == *'"cached_at"'* ]]
 }
 
-# --- Cached .html ---
+# --- Cached .md (frontmatter title and headings) ---
 
-@test "cached html provides title in output" {
-  printf 'content line\n' > "$TEST_CACHE/doc_test_page.txt"
-  printf '<html><head><title>Test Page Title</title></head><body><h1>Heading</h1></body></html>\n' \
-    > "$TEST_CACHE/doc_test_page.html"
+@test "cached md provides frontmatter title in output" {
+  mkdir -p "$TEST_CACHE/latest"
+  printf 'content line\n' > "$TEST_CACHE/latest/doc_test_page.txt"
+  cat > "$TEST_CACHE/latest/doc_test_page.md" <<'MD'
+---
+title: "Test Page Title"
+---
+# Heading
+MD
   run "$INFO_SH" test/page
   [ "$status" -eq 0 ]
   [[ "$output" == *"Test Page Title"* ]]
 }
 
-@test "cached html provides headings in output" {
-  printf 'content\n' > "$TEST_CACHE/doc_test_page.txt"
-  printf '<html><body><h1>Overview</h1><h2>Setup</h2></body></html>\n' \
-    > "$TEST_CACHE/doc_test_page.html"
+@test "cached md provides headings in output" {
+  mkdir -p "$TEST_CACHE/latest"
+  printf 'content\n' > "$TEST_CACHE/latest/doc_test_page.txt"
+  printf '# Overview\n## Setup\n' \
+    > "$TEST_CACHE/latest/doc_test_page.md"
   run "$INFO_SH" test/page
   [ "$status" -eq 0 ]
   [[ "$output" == *"Overview"* ]]
 }
 
 @test "OPENCLAW_SAGE_OUTPUT=json works as --json alternative" {
-  printf 'content\n' > "$TEST_CACHE/doc_test_page.txt"
+  mkdir -p "$TEST_CACHE/latest"
+  printf 'content\n' > "$TEST_CACHE/latest/doc_test_page.txt"
   run env OPENCLAW_SAGE_OUTPUT=json OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" "$INFO_SH" test/page
   [ "$status" -eq 0 ]
   [[ "$output" == *'"word_count"'* ]]
+}
+
+@test "info: extracts title from YAML frontmatter in .md cache" {
+  mkdir -p "$TEST_CACHE/local"
+  cat > "$TEST_CACHE/local/doc_gateway_configuration.md" <<'MD'
+---
+title: "Gateway Configuration"
+summary: "Config overview"
+---
+# Config
+MD
+  echo "word content here" > "$TEST_CACHE/local/doc_gateway_configuration.txt"
+  export OPENCLAW_SAGE_SOURCE="local:$TEST_CACHE/src"
+  run "$REPO_ROOT/scripts/info.sh" gateway/configuration
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Gateway Configuration"* ]]
+}
+
+@test "info --version: reads from versioned cache dir" {
+  mkdir -p "$TEST_CACHE/v2026.4.9"
+  cat > "$TEST_CACHE/v2026.4.9/doc_gateway_configuration.md" <<'MD'
+---
+title: "Old Config"
+---
+MD
+  echo "words" > "$TEST_CACHE/v2026.4.9/doc_gateway_configuration.txt"
+  export OPENCLAW_SAGE_SOURCE="local:$TEST_CACHE/src"
+  run env OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
+          OPENCLAW_SAGE_SOURCE="github" \
+          "$REPO_ROOT/scripts/info.sh" --version v2026.4.9 gateway/configuration
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Old Config"* ]]
 }
