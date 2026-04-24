@@ -166,6 +166,22 @@ MD
   [[ "$output" == *'"key": "<Value>"'* ]]
 }
 
+@test "clean_markdown: strips nested MDX tags, keeps innermost text" {
+  cat > "$TEST_CACHE/input.md" <<'MD'
+<CardGroup>
+<Card title="Example">
+Nested content.
+</Card>
+</CardGroup>
+MD
+  source "$REPO_ROOT/scripts/lib.sh"
+  clean_markdown "$TEST_CACHE/input.md" "$TEST_CACHE/output.txt"
+  run cat "$TEST_CACHE/output.txt"
+  [[ "$output" == *"Nested content."* ]]
+  [[ "$output" != *"<Card"* ]]
+  [[ "$output" != *"<CardGroup"* ]]
+}
+
 # --- resolve_source ---
 
 @test "resolve_source: github mode returns raw.githubusercontent.com URL" {

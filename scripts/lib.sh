@@ -62,7 +62,8 @@ resolve_source() {
   fi
 }
 
-# resolve_source_raw <relative_path> <ref> — like resolve_source but for non-doc paths (e.g. docs.json)
+# resolve_source_raw <relative_path> <ref> — like resolve_source but without .md suffix
+# <relative_path> is relative to the docs/ directory (e.g. "docs.json")
 resolve_source_raw() {
   local rel_path="$1" ref="${2:-main}"
   if [[ "$SOURCE" == local:* ]]; then
@@ -130,6 +131,7 @@ PYEOF
 # Returns 0 on success, 1 on failure.
 fetch_markdown() {
   local safe="$1" ref="${2:-main}"
+  : "${VERSION_CACHE_DIR:?fetch_markdown requires VERSION_CACHE_DIR — call parse_version_flag first}"
   local doc_path
   doc_path="$(echo "$safe" | tr '_' '/')"
   local source_url
@@ -138,7 +140,7 @@ fetch_markdown() {
   local txt_file="${VERSION_CACHE_DIR}/doc_${safe}.txt"
   local tmp_md
   tmp_md=$(mktemp)
-  trap 'rm -f "$tmp_md"' RETURN
+  trap 'rm -f "$tmp_md"' EXIT
 
   if [[ "$SOURCE" == local:* ]]; then
     if [ ! -f "$source_url" ]; then
