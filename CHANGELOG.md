@@ -5,23 +5,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [Unreleased]
+## [0.3.1] - 2026-04-24
 
-### ENH-26 — GitHub/local Markdown source + doc versioning
+### Added
 
-- **Breaking:** Old flat cache (`$CACHE_DIR/doc_*.txt`, `sitemap.xml`) abandoned — run `build-index.sh fetch` to repopulate
-- **Breaking:** `lynx`/`w3m` no longer used or needed
-- **Breaking:** `OPENCLAW_SAGE_SITEMAP_TTL` env var removed
-- New `OPENCLAW_SAGE_SOURCE` env var: `github` (default) or `local:/path/to/openclaw/docs`
-- New `--version <tag>` flag on all scripts — fetch and query docs at any OpenClaw release
-- New `cache.sh tags` subcommand — list available OpenClaw release tags from GitHub
-- `cache.sh status` now lists all cached versions with doc counts and index status
-- `sitemap.sh` reads `docs.json` instead of `sitemap.xml` — preserves category structure
-- `recent.sh` removes "updated at source" section (no lastmod in docs.json)
-- `fetch-doc.sh --toc`/`--section` now parses Markdown headings (simpler, no HTML needed)
-- `info.sh` extracts title from YAML frontmatter instead of HTML `<title>`
-- `build-index.sh fetch` now fetches Markdown files from GitHub raw or local clone
-- Cache layout: `$CACHE_DIR/<version>/` — multiple versions coexist
+- **`OPENCLAW_SAGE_SOURCE`** env var — `github` (default) or `local:/path/to/openclaw/docs`. Selects where docs are fetched from.
+- **`--version <tag>`** flag on all scripts — fetch and query docs at any OpenClaw release tag (e.g. `v2026.4.22`). Omit for `latest` (from `main`).
+- **`cache.sh tags`** — list available OpenClaw release tags from GitHub API.
+- **`cache.sh status`** now lists all cached versions with doc counts and index status per version.
+- Version-scoped cache layout: `$CACHE_DIR/<version>/` — multiple versions coexist on disk.
+
+### Changed
+
+- **`build-index.sh fetch`** now fetches raw Markdown files from the OpenClaw GitHub repo (or a local clone) instead of HTML from `docs.openclaw.ai`. Uses `docs.json` for doc discovery instead of `sitemap.xml`.
+- **`sitemap.sh`** reads `docs.json` navigation tree instead of `sitemap.xml`. Output format unchanged.
+- **`fetch-doc.sh --toc`/`--section`** now parses `#` Markdown headings instead of HTML `<h1>`–`<h6>`. No longer requires the HTML cache.
+- **`info.sh`** extracts title from YAML frontmatter instead of HTML `<title>`.
+- **`recent.sh`** removes the "updated at source" section (no `lastmod` in `docs.json`). Adds hints pointing to `cache.sh status` and `cache.sh tags`.
+
+### Removed
+
+- **HTML fetch pipeline** (`fetch_and_cache`, `fetch_text`, `clean_html_file`, `html_to_text` in `lib.sh`) — replaced by `fetch_markdown`, `clean_markdown`, `resolve_source`.
+- **`OPENCLAW_SAGE_SITEMAP_TTL`** env var — sitemap TTL is no longer relevant.
+- **`lynx`/`w3m`** optional deps — HTML-to-text conversion is no longer needed.
+- **`.html` cache files** (`doc_<path>.html`) — replaced by `.md` cache files.
+
+### Breaking Changes
+
+- Old flat cache (`$CACHE_DIR/doc_*.txt`, `sitemap.xml`) abandoned. Run `build-index.sh fetch` to repopulate.
+- `OPENCLAW_SAGE_SITEMAP_TTL` env var no longer has any effect.
+- `recent.sh` no longer shows "updated at source" dates.
 
 ---
 

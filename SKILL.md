@@ -1,7 +1,7 @@
 ---
 name: openclaw-sage
 description: OpenClaw documentation expert — answers user questions about OpenClaw setup, configuration, providers, troubleshooting, and what's new using live doc fetching, BM25 search, and change tracking
-version: 0.3.0
+version: 0.3.1
 metadata:
   openclaw:
     requires:
@@ -112,7 +112,6 @@ url:       https://docs.openclaw.ai/gateway/configuration
 ```
 - If BM25 index is built: results are **ranked by relevance** with float scores.
 - If only cached docs exist: grep fallback, score shown as `[---]`.
-- If only sitemap: path matches only, no content excerpts.
 
 **JSON output (`--json` or `OPENCLAW_SAGE_OUTPUT=json`):**
 ```json
@@ -121,16 +120,17 @@ url:       https://docs.openclaw.ai/gateway/configuration
   "mode": "bm25",
   "results": [
     {"score": 0.823, "path": "automation/webhook", "url": "https://...", "excerpt": "..."}
-  ],
-  "sitemap_matches": [{"path": "automation/webhook", "url": "https://..."}]
+  ]
 }
 ```
+
+`mode` values: `"bm25"` · `"grep"` · `"no-cache"`
 **Errors:** If no cache at all, prints instructions to fetch docs first.
 
 ---
 
 ### `./scripts/build-index.sh fetch`
-**Purpose:** Download all docs to local cache (both `.html` and `.txt`).
+**Purpose:** Download all docs to local cache (both `.md` and `.txt`).
 **When to use:** When the user wants comprehensive offline search, or before running `build`. After fetching, `--toc`, `--section`, and `info.sh` all work offline without a second network request.
 **Output:** One `[done] <path>` line per fetched doc, then total docs cached.
 **Notes:** Fetching runs in parallel by default when `xargs` is available. Tune worker count with `OPENCLAW_SAGE_FETCH_JOBS` (default `8`; set to `1` for sequential fetching). If `xargs` is unavailable, the script falls back to sequential fetching automatically.
