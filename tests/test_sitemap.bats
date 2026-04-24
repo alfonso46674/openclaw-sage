@@ -1,7 +1,5 @@
 #!/usr/bin/env bats
 # Tests for scripts/sitemap.sh
-# Also serves as a BUG-02 regression test: verifies the POSIX grep -o + sed
-# replacement for grep -oP works correctly on both Linux and macOS.
 
 REPO_ROOT="$(cd "$(dirname "$BATS_TEST_FILENAME")/.." && pwd)"
 SITEMAP_SH="$REPO_ROOT/scripts/sitemap.sh"
@@ -17,31 +15,31 @@ teardown() {
   rm -rf "$TEST_CACHE"
 }
 
-_seed_sitemap_xml() {
-  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://docs.openclaw.ai/gateway/configuration</loc></url>
-  <url><loc>https://docs.openclaw.ai/gateway/security</loc></url>
-  <url><loc>https://docs.openclaw.ai/providers/discord</loc></url>
-  <url><loc>https://docs.openclaw.ai/providers/telegram</loc></url>
-</urlset>
-XML
+_seed_docs_json() {
+  mkdir -p "$TEST_CACHE/latest"
+  cat > "$TEST_CACHE/latest/docs.json" <<'JSON'
+{"navigation":{"languages":[{"language":"en","tabs":[
+  {"tab":"Docs","groups":[
+    {"group":"Gateway","pages":["gateway/configuration","gateway/security"]},
+    {"group":"Providers","pages":["providers/discord","providers/telegram"]}
+  ]}
+]}]}}
+JSON
 }
 
 # --- Human output ---
 
-@test "human: serves fresh sitemap.txt from cache without fetching" {
-  printf '📁 /gateway/\n  - gateway/configuration\n' > "$TEST_CACHE/sitemap.txt"
+@test "human: serves categories from cached docs.json" {
+  _seed_docs_json
   run "$SITEMAP_SH"
   [ "$status" -eq 0 ]
   [[ "$output" == *"gateway"* ]]
 }
 
-@test "human: offline fallback is shown when no cache and host unreachable" {
-  run bash -c "OPENCLAW_SAGE_DOCS_BASE_URL='http://127.0.0.1:1' OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' '$SITEMAP_SH' 2>&1"
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"automation"* ]]
+@test "human: missing docs.json with unreachable local source exits with error" {
+  run bash -c "OPENCLAW_SAGE_SOURCE='local:/tmp/no-such-dir-$$' OPENCLAW_SAGE_CACHE_DIR='$TEST_CACHE' '$SITEMAP_SH' 2>&1"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Error"* ]]
 }
 
 # --- JSON output ---
@@ -55,22 +53,21 @@ XML
   [[ "$output" == *"python3"* ]]
 }
 
-@test "--json with seeded sitemap.xml returns a valid JSON array" {
+@test "--json with seeded docs.json returns a valid JSON array" {
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
-  _seed_sitemap_xml
+  _seed_docs_json
   run "$SITEMAP_SH" --json
   [ "$status" -eq 0 ]
   python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert isinstance(d,list)" "$output"
 }
 
-@test "--json extracts correct categories and paths from sitemap.xml (BUG-02 regression)" {
-  # Verifies the POSIX grep -o + sed replacement for grep -oP works correctly.
+@test "--json extracts correct categories and paths from docs.json" {
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
-  _seed_sitemap_xml
+  _seed_docs_json
   run "$SITEMAP_SH" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"gateway"'* ]]
@@ -83,7 +80,7 @@ XML
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
-  _seed_sitemap_xml
+  _seed_docs_json
   run "$SITEMAP_SH" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"category"'* ]]
@@ -94,28 +91,79 @@ XML
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
-  _seed_sitemap_xml
+  _seed_docs_json
   run env OPENCLAW_SAGE_OUTPUT=json OPENCLAW_SAGE_CACHE_DIR="$TEST_CACHE" \
       OPENCLAW_SAGE_DOCS_BASE_URL="https://docs.openclaw.ai" "$SITEMAP_SH"
   [ "$status" -eq 0 ]
   [[ "$output" == *'"category"'* ]]
 }
 
-@test "--json with sitemap.xml containing multiple categories parses all of them" {
+@test "--json with docs.json containing multiple categories parses all of them" {
   if ! command -v python3 &>/dev/null; then
     skip "python3 not available"
   fi
-  cat > "$TEST_CACHE/sitemap.xml" <<'XML'
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://docs.openclaw.ai/gateway/configuration</loc></url>
-  <url><loc>https://docs.openclaw.ai/cli/update</loc></url>
-  <url><loc>https://docs.openclaw.ai/install/docker</loc></url>
-</urlset>
-XML
+  mkdir -p "$TEST_CACHE/latest"
+  cat > "$TEST_CACHE/latest/docs.json" <<'JSON'
+{"navigation":{"languages":[{"language":"en","tabs":[
+  {"tab":"Docs","groups":[
+    {"group":"Gateway","pages":["gateway/configuration"]},
+    {"group":"CLI","pages":["cli/update"]},
+    {"group":"Install","pages":["install/docker"]}
+  ]}
+]}]}}
+JSON
   run "$SITEMAP_SH" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"gateway"'* ]]
   [[ "$output" == *'"cli"'* ]]
   [[ "$output" == *'"install"'* ]]
+}
+
+@test "sitemap: reads category structure from local docs.json" {
+  local src="$TEST_CACHE/src"
+  mkdir -p "$src"
+  cat > "$src/docs.json" <<'JSON'
+{"navigation":{"languages":[{"language":"en","tabs":[
+  {"tab":"Docs","groups":[
+    {"group":"Gateway","pages":["gateway/configuration","gateway/troubleshooting"]},
+    {"group":"Install","pages":["install/docker"]}
+  ]}
+]}]}}
+JSON
+  export OPENCLAW_SAGE_SOURCE="local:$src"
+  run "$REPO_ROOT/scripts/sitemap.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gateway"* ]]
+  [[ "$output" == *"gateway/configuration"* ]]
+  [[ "$output" == *"install"* ]]
+}
+
+@test "sitemap --json: returns valid JSON with category/paths structure" {
+  local src="$TEST_CACHE/src"
+  mkdir -p "$src"
+  cat > "$src/docs.json" <<'JSON'
+{"navigation":{"languages":[{"language":"en","tabs":[
+  {"tab":"Docs","groups":[
+    {"group":"Gateway","pages":["gateway/configuration"]}
+  ]}
+]}]}}
+JSON
+  export OPENCLAW_SAGE_SOURCE="local:$src"
+  run "$REPO_ROOT/scripts/sitemap.sh" --json
+  [ "$status" -eq 0 ]
+  python3 -c "import sys,json; d=json.loads('''$output'''); assert d[0]['category'] == 'gateway'"
+}
+
+@test "sitemap: uses cached docs.json when fresh" {
+  mkdir -p "$TEST_CACHE/local"
+  cat > "$TEST_CACHE/local/docs.json" <<'JSON'
+{"navigation":{"languages":[{"language":"en","tabs":[
+  {"tab":"Docs","groups":[{"group":"Start","pages":["start/index"]}]}
+]}]}}
+JSON
+  export OPENCLAW_SAGE_SOURCE="local:$TEST_CACHE/nonexistent"
+  export OPENCLAW_SAGE_DOC_TTL=99999
+  run "$REPO_ROOT/scripts/sitemap.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"start/index"* ]]
 }
