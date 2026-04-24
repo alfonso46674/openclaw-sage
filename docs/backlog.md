@@ -229,6 +229,13 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 
 ### Tier 3 (significant effort — planned)
 
+#### ENH-26 — GitHub/local Markdown source + doc versioning
+- **Status:** done — 2b618e2
+- **Description:** Replace the Mintlify HTML scraping pipeline with a direct Markdown source (GitHub raw or local clone). Cache layout becomes `$CACHE_DIR/<version>/`, supporting multiple coexisting doc versions. All scripts gain a `--version <tag>` flag. `cache.sh tags` lists available GitHub releases. `sitemap.sh` reads `docs.json` instead of `sitemap.xml`. Breaks `lynx`/`w3m` and `OPENCLAW_SAGE_SITEMAP_TTL` dependencies.
+- **Files changed:** `scripts/lib.sh`, `scripts/build-index.sh`, `scripts/sitemap.sh`, `scripts/fetch-doc.sh`, `scripts/info.sh`, `scripts/cache.sh`, `scripts/recent.sh`, `scripts/search.sh`, `scripts/track-changes.sh`, `README.md`, `SKILL.md`
+- **Breaking changes:** Old flat cache (`doc_*.txt`, `sitemap.xml`) abandoned; `lynx`/`w3m` no longer used; `OPENCLAW_SAGE_SITEMAP_TTL` removed.
+- **New env var:** `OPENCLAW_SAGE_SOURCE` — `github` (default) or `local:/path/to/openclaw/docs`
+
 #### ENH-19 — Content-change tracking (page-level diffing)
 - **Status:** proposed
 - **Description:** `track-changes.sh` tracks structural changes (pages added/removed from sitemap). It cannot detect when an existing page's *content* changes. This enhancement adds content-change awareness by storing a checksum for each cached doc and comparing on re-fetch.

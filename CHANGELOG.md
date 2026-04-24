@@ -5,6 +5,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### ENH-26 — GitHub/local Markdown source + doc versioning
+
+- **Breaking:** Old flat cache (`$CACHE_DIR/doc_*.txt`, `sitemap.xml`) abandoned — run `build-index.sh fetch` to repopulate
+- **Breaking:** `lynx`/`w3m` no longer used or needed
+- **Breaking:** `OPENCLAW_SAGE_SITEMAP_TTL` env var removed
+- New `OPENCLAW_SAGE_SOURCE` env var: `github` (default) or `local:/path/to/openclaw/docs`
+- New `--version <tag>` flag on all scripts — fetch and query docs at any OpenClaw release
+- New `cache.sh tags` subcommand — list available OpenClaw release tags from GitHub
+- `cache.sh status` now lists all cached versions with doc counts and index status
+- `sitemap.sh` reads `docs.json` instead of `sitemap.xml` — preserves category structure
+- `recent.sh` removes "updated at source" section (no lastmod in docs.json)
+- `fetch-doc.sh --toc`/`--section` now parses Markdown headings (simpler, no HTML needed)
+- `info.sh` extracts title from YAML frontmatter instead of HTML `<title>`
+- `build-index.sh fetch` now fetches Markdown files from GitHub raw or local clone
+- Cache layout: `$CACHE_DIR/<version>/` — multiple versions coexist
+
+---
+
 ## [0.3.0] — 2026-04-23
 
 ### Fixed
