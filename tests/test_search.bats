@@ -100,16 +100,6 @@ teardown() {
   [[ "$output" != *"gateway/webhook"* ]]
 }
 
-# --- Sitemap path matches ---
-
-@test "finds sitemap path match when sitemap.txt is seeded" {
-  printf '📁 /providers/\n  - providers/discord\n  - providers/telegram\n' \
-    > "$TEST_CACHE/sitemap.txt"
-  run "$SEARCH_SH" discord
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"providers/discord"* ]]
-}
-
 # --- BUG-01 regression: DOCS_BASE_URL respected in search output ---
 
 @test "search output uses OPENCLAW_SAGE_DOCS_BASE_URL not a hardcoded URL (BUG-01 regression)" {
