@@ -153,14 +153,16 @@ case "$1" in
     ;;
 
   diff)
-    # Compare two named snapshots directly
+    # Compare two named snapshots directly.
+    # Arguments may be snapshot names (resolved under $SNAPSHOTS_DIR)
+    # or absolute paths (useful for cross-version comparisons).
     if [ -z "$2" ] || [ -z "$3" ]; then
       echo "Usage: track-changes.sh diff <snapshot1> <snapshot2>"
-      echo "Run 'list' to see available snapshot names."
+      echo "  snapshot1/2: name (from 'list') or absolute path to a snapshot file"
       exit 1
     fi
-    F1="${SNAPSHOTS_DIR}/$2.txt"
-    F2="${SNAPSHOTS_DIR}/$3.txt"
+    [[ "$2" == /* ]] && F1="$2" || F1="${SNAPSHOTS_DIR}/$2.txt"
+    [[ "$3" == /* ]] && F2="$3" || F2="${SNAPSHOTS_DIR}/$3.txt"
     [ -f "$F1" ] || { echo "Snapshot not found: $2"; exit 1; }
     [ -f "$F2" ] || { echo "Snapshot not found: $3"; exit 1; }
 

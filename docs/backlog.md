@@ -106,6 +106,13 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Description:** The "Tip: For comprehensive ranked results..." lines are always printed to stdout even when results were found. Agents parsing stdout receive unexpected non-result text. Violates the "stdout is data, stderr is diagnostics" convention.
 - **Fix:** Redirect the "Tip:" block to `>&2`, or omit it entirely when results were found (only print as guidance when `found=0`).
 
+#### BUG-21 — `track-changes.sh diff/list/since` cannot cross version boundaries
+- **File:** `scripts/track-changes.sh:162-163`
+- **Status:** done — see fix below
+- **Description:** `diff`, `list`, and `since` resolve snapshot paths relative to `$VERSION_CACHE_DIR/snapshots/` (set by `--version` or defaulting to `latest`). There is no way to reference a snapshot from a different version's directory — `diff <snap1> <snap2>` silently exits with "Snapshot not found" when either snapshot lives in a different version's cache. The use case of comparing a snapshot taken against `v2026.4.9` with one taken against `v2026.4.22` is entirely blocked.
+- **Workaround:** Use `diff <absolute_path1> <absolute_path2>` directly on the snapshot files.
+- **Fix (Option A):** In the `diff` subcommand, check whether each argument starts with `/`. If so, treat it as an absolute path; otherwise resolve it relative to `$SNAPSHOTS_DIR`. Zero new flags, fully backward-compatible.
+
 #### BUG-20 — `build-index.sh` error message goes to stdout instead of stderr
 - **File:** `scripts/build-index.sh:63`
 - **Status:** done — 9ebb8b7
