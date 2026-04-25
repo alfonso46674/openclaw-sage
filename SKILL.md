@@ -197,7 +197,8 @@ url:       https://docs.openclaw.ai/gateway/configuration
 **Output:** `=== Added ===` and `=== Removed ===` sections.
 
 ### `./scripts/track-changes.sh diff <snap1> <snap2>`
-**Purpose:** Compare two specific named snapshots directly.
+**Purpose:** Compare two specific snapshots directly.
+**Input:** Snapshot name (from `list`) or absolute path to a snapshot file. Absolute paths allow cross-version comparison — e.g. comparing a snapshot from `v2026.4.9` against one from `v2026.4.22`.
 
 ---
 
