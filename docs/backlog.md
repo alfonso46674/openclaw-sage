@@ -1,6 +1,6 @@
 # openclaw-sage — Backlog
 
-Last audited: 2026-03-11
+Last audited: 2026-04-23
 
 This file tracks known bugs, tech debt, and planned enhancements. Any agent or developer picking up work here should read `docs/coding-conventions.md` first, then implement the item, update its status, and note the commit SHA.
 
@@ -82,11 +82,11 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 
 #### BUG-10 — Fetched HTML is not cleaned before caching; noise bleeds into `.txt` and search
 - **Files:** `scripts/lib.sh` (`fetch_and_cache`, `fetch_text`)
-- **Status:** done — c9a5214
+- **Status:** superseded — replaced by ENH-26 (GitHub/local Markdown source). The HTML cleaning pipeline is removed entirely in v0.3.1; there is no HTML to clean.
 - **Description:** Raw HTML is stored as-is. `<script>`, `<style>`, and structural chrome (`<nav>`, `<header>`, `<footer>`) are never removed. Two downstream problems:
   1. The `sed` fallback in `fetch_text` and `fetch_and_cache` processes HTML one line at a time, so multi-line `<script>`/`<style>` blocks (the norm) are not stripped — raw JS and CSS end up in `.txt`, polluting search and BM25 results.
   2. Even with `lynx`/`w3m`, navigation and footer text is included in the `.txt`, adding irrelevant tokens to the search index.
-- **Fix:** In `fetch_and_cache`, add a Python cleaning step between the `curl` download and writing `doc_<safe>.html`. Use `html.parser` (stdlib, no new deps) to remove `<script>`, `<style>`, `<noscript>`, `<nav>`, `<header>`, and `<footer>` elements from the parsed DOM before saving. If `python3` is unavailable, store the raw HTML as-is (current behaviour — no regression). Because `.txt` is derived from the cleaned `.html`, both files benefit automatically. The output does not need to be W3C-valid — it only needs heading structure intact for `--toc`/`--section`.
+- **Fix:** Superseded — ENH-26 removes the HTML fetch pipeline entirely and replaces it with Markdown source fetching.
 
 #### BUG-15 — `snippets/common-configs.md` references outdated model name
 - **File:** `snippets/common-configs.md`
@@ -105,6 +105,19 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Status:** done — 923fc02
 - **Description:** The "Tip: For comprehensive ranked results..." lines are always printed to stdout even when results were found. Agents parsing stdout receive unexpected non-result text. Violates the "stdout is data, stderr is diagnostics" convention.
 - **Fix:** Redirect the "Tip:" block to `>&2`, or omit it entirely when results were found (only print as guidance when `found=0`).
+
+#### BUG-22 — `track-changes.sh diff` and `since` pass unsorted files to `comm`
+- **File:** `scripts/track-changes.sh:132-133,172,175`
+- **Status:** done — see fix below
+- **Description:** `comm` requires both inputs to be sorted. New snapshots are always sorted (Python `sorted()` in `get_current_pages`), but snapshots created before ENH-26 or copied from external sources may not be. `comm` emits "file is not in sorted order" warnings to stderr and produces incorrect output on non-GNU systems that enforce the sort precondition strictly. Both `diff` and `since` are affected.
+- **Fix:** Wrap both `comm` inputs in `<(sort ...)` process substitutions. No change to output format.
+
+#### BUG-21 — `track-changes.sh diff/list/since` cannot cross version boundaries
+- **File:** `scripts/track-changes.sh:162-163`
+- **Status:** done — see fix below
+- **Description:** `diff`, `list`, and `since` resolve snapshot paths relative to `$VERSION_CACHE_DIR/snapshots/` (set by `--version` or defaulting to `latest`). There is no way to reference a snapshot from a different version's directory — `diff <snap1> <snap2>` silently exits with "Snapshot not found" when either snapshot lives in a different version's cache. The use case of comparing a snapshot taken against `v2026.4.9` with one taken against `v2026.4.22` is entirely blocked.
+- **Workaround:** Use `diff <absolute_path1> <absolute_path2>` directly on the snapshot files.
+- **Fix (Option A):** In the `diff` subcommand, check whether each argument starts with `/`. If so, treat it as an absolute path; otherwise resolve it relative to `$SNAPSHOTS_DIR`. Zero new flags, fully backward-compatible.
 
 #### BUG-20 — `build-index.sh` error message goes to stdout instead of stderr
 - **File:** `scripts/build-index.sh:63`
@@ -229,6 +242,13 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 
 ### Tier 3 (significant effort — planned)
 
+#### ENH-26 — GitHub/local Markdown source + doc versioning
+- **Status:** done — 2b618e2
+- **Description:** Replace the Mintlify HTML scraping pipeline with a direct Markdown source (GitHub raw or local clone). Cache layout becomes `$CACHE_DIR/<version>/`, supporting multiple coexisting doc versions. All scripts gain a `--version <tag>` flag. `cache.sh tags` lists available GitHub releases. `sitemap.sh` reads `docs.json` instead of `sitemap.xml`. Breaks `lynx`/`w3m` and `OPENCLAW_SAGE_SITEMAP_TTL` dependencies.
+- **Files changed:** `scripts/lib.sh`, `scripts/build-index.sh`, `scripts/sitemap.sh`, `scripts/fetch-doc.sh`, `scripts/info.sh`, `scripts/cache.sh`, `scripts/recent.sh`, `scripts/search.sh`, `scripts/track-changes.sh`, `README.md`, `SKILL.md`
+- **Breaking changes:** Old flat cache (`doc_*.txt`, `sitemap.xml`) abandoned; `lynx`/`w3m` no longer used; `OPENCLAW_SAGE_SITEMAP_TTL` removed.
+- **New env var:** `OPENCLAW_SAGE_SOURCE` — `github` (default) or `local:/path/to/openclaw/docs`
+
 #### ENH-19 — Content-change tracking (page-level diffing)
 - **Status:** proposed
 - **Description:** `track-changes.sh` tracks structural changes (pages added/removed from sitemap). It cannot detect when an existing page's *content* changes. This enhancement adds content-change awareness by storing a checksum for each cached doc and comparing on re-fetch.
@@ -301,7 +321,7 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
 - **Agent value:** Enables "create a snapshot before a release, create another after, diff them" workflows. Agents and developers can answer "what changed in the docs between version X and version Y?" with actual text diffs, not just a list of touched pages.
 
 #### ENH-23 — Doc version awareness (builds on ENH-19)
-- **Status:** proposed
+- **Status:** proposed — superseded in scope by ENH-26. ENH-26 enables fetching docs at any git tag directly; ENH-23's "what changed between two points in time?" workflow is now answered by fetching two tags and diffing. Retain only if per-file commit-date history is still wanted.
 - **Description:** Building on ENH-19's checksum storage, add the ability to answer "what changed in the docs between two points in time?" Currently `track-changes.sh` only tracks structural changes (pages added/removed). This enhancement stores checksums over time and can diff content changes between any two fetches.
 - **Implementation notes:**
   - Store checksums with timestamps: `doc_<path>.sha256` contains `<sha256> <ISO8601_timestamp>` per line (append-only log).
@@ -309,6 +329,35 @@ Grouped by effort and value. Items within each tier are ordered by agent/user va
   - Output format: `[changed] gateway/configuration (2 revisions since 2026-03-01)`, `[stable] providers/discord`.
   - Optional: store the old `.txt` before overwriting so the actual text diff can be shown.
 - **Dependencies:** ENH-19 (checksum infrastructure).
+
+#### ENH-26 — GitHub/local Markdown source (replaces HTML fetch pipeline)
+- **Status:** planned — v0.3.1
+- **Spec:** `docs/superpowers/specs/2026-04-23-github-source-design.md`
+- **Description:** Replace the HTML fetch pipeline (`fetch_and_cache`, `fetch_text`, `clean_html_file`, `html_to_text`, sitemap.xml) with a Markdown-source pipeline that fetches docs from the OpenClaw GitHub repo or a local clone. Eliminates HTML cleaning noise, enables per-tag doc fetching, and adds a `--version` flag to all scripts for querying docs at any OpenClaw release.
+- **New env var:** `OPENCLAW_SAGE_SOURCE` (`github` default, or `local:/path/to/docs`).
+- **New CLI flag:** `--version <tag>` on all scripts (default: `latest`, fetched from `main`).
+- **New subcommand:** `cache.sh tags` — lists available OpenClaw release tags from GitHub API.
+- **Implementation notes:**
+  - `lib.sh`: replace `fetch_and_cache`/`fetch_text`/`clean_html_file`/`html_to_text` with `fetch_markdown`/`resolve_source`/`clean_markdown`. Add `VERSION_CACHE_DIR` derived from `--version` flag. Remove `SITEMAP_TTL`.
+  - `build-index.sh fetch`: use `docs.json` for discovery (replaces sitemap.xml); call `fetch_markdown` per path; preserve `xargs -P` parallel loop.
+  - `sitemap.sh`: parse `docs.json` navigation tree instead of sitemap.xml. Output format unchanged.
+  - `fetch-doc.sh --toc`/`--section`: parse `#` headings from cached `.md` file (simpler than HTML heading parser).
+  - `info.sh`: extract title from YAML frontmatter in `.md` instead of HTML `<title>`.
+  - `recent.sh`: remove "updated at source" section (no `lastmod` in `docs.json`); keep local mtime section.
+  - All scripts: use `VERSION_CACHE_DIR` scoped to active `--version`.
+  - Cache layout: `$CACHE_DIR/<version>/doc_<path>.{md,txt}` per version. Old flat cache abandoned (clean break).
+  - MDX components stripped with Python regex (stdlib); YAML frontmatter `title`/`summary` prepended to `.txt`.
+- **Supersedes:** BUG-10 (HTML cleaning — no longer needed).
+- **Agent value:** Agents can fetch and search docs at any OpenClaw release tag. Comparing two versions is `fetch --version v1 && fetch --version v2`, then diff outputs of `fetch-doc.sh --version`.
+
+#### ENH-27 — `recent.sh` per-file commit dates via GitHub API (post-ENH-26)
+- **Status:** proposed
+- **Description:** ENH-26 removes the sitemap `<lastmod>` "updated at source" section from `recent.sh` because `docs.json` has no equivalent dates. This enhancement restores that capability by querying the GitHub API for the last-commit date of each doc file. Requires a `GITHUB_TOKEN` env var for practical use (60 req/hr unauthenticated is too low for 500+ files).
+- **Implementation notes:**
+  - `GET /repos/openclaw/openclaw/commits?path=docs/<path>.md&per_page=1` returns the latest commit for a file.
+  - Cache commit dates in `$VERSION_CACHE_DIR/commit_dates.json` (TTL: `SITEMAP_TTL` or a new `OPENCLAW_SAGE_COMMIT_DATES_TTL`).
+  - `recent.sh` compares cached commit dates against the requested `--days` window.
+- **Dependencies:** ENH-26 (ships first).
 
 ---
 

@@ -8,7 +8,6 @@ An [OpenClaw](https://openclaw.ai) skill that makes any agent an expert on [Open
 - `curl`
 - `xargs` *(standard on macOS/Linux; used for parallel `build-index.sh fetch`)*
 - `python3` *(optional, recommended — enables BM25 ranked search, `--toc`/`--section` extraction, JSON output, and `recent.sh` date parsing)*
-- `lynx` or `w3m` *(optional, recommended — improves HTML-to-text quality)*
 
 ## Environment Variables
 
@@ -16,7 +15,7 @@ All variables are optional. Defaults work out of the box.
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENCLAW_SAGE_SITEMAP_TTL` | `3600` | Sitemap cache TTL in seconds (1hr) |
+| `OPENCLAW_SAGE_SOURCE` | `github` | Doc source: `github` (fetch from GitHub) or `local:/path/to/openclaw/docs` (use local repo clone) |
 | `OPENCLAW_SAGE_DOC_TTL` | `86400` | Doc page cache TTL in seconds (24hr) |
 | `OPENCLAW_SAGE_FETCH_JOBS` | `8` | Parallel worker count for `build-index.sh fetch` (`1` restores sequential behavior) |
 | `OPENCLAW_SAGE_CACHE_DIR` | `<skill_root>/.cache/openclaw-sage` | Cache directory |
@@ -30,6 +29,30 @@ OPENCLAW_SAGE_DOC_TTL=60 ./scripts/fetch-doc.sh gateway/configuration
 OPENCLAW_SAGE_LANGS=en,zh ./scripts/build-index.sh fetch
 OPENCLAW_SAGE_FETCH_JOBS=4 ./scripts/build-index.sh fetch
 OPENCLAW_SAGE_OUTPUT=json ./scripts/search.sh webhook
+OPENCLAW_SAGE_SOURCE=local:/path/to/openclaw/docs ./scripts/build-index.sh fetch
+```
+
+## Version Support
+
+All scripts accept a `--version <tag>` flag to work with docs at a specific OpenClaw release. Omitting it defaults to `latest` (fetched from `main`).
+
+```bash
+./scripts/cache.sh tags                                          # list available release tags
+./scripts/build-index.sh fetch --version v2026.4.22             # fetch docs at a tag
+./scripts/build-index.sh build --version v2026.4.22             # build index for that version
+./scripts/search.sh --version v2026.4.22 webhook                # search a specific version
+./scripts/fetch-doc.sh --version v2026.4.22 gateway/configuration  # read from a specific version
+```
+
+Compare two versions:
+```bash
+diff <(./scripts/fetch-doc.sh --version v2026.4.9 gateway/configuration) \
+     <(./scripts/fetch-doc.sh --version v2026.4.22 gateway/configuration)
+```
+
+Use a local clone instead of GitHub (no network required):
+```bash
+OPENCLAW_SAGE_SOURCE=local:/path/to/openclaw/docs ./scripts/build-index.sh fetch
 ```
 
 ## Scripts
@@ -95,15 +118,17 @@ Build a local BM25 index for ranked search across all docs:
 
 Files are stored in `.cache/openclaw-sage/` inside the skill root by default (override with `OPENCLAW_SAGE_CACHE_DIR`):
 
+Each version gets its own subdirectory (e.g. `latest/`, `v2026.4.22/`):
+
 | File | Description |
 |---|---|
-| `sitemap.xml` | Raw sitemap XML from docs.openclaw.ai |
-| `sitemap.txt` | Parsed sitemap, human-readable (TTL: `SITEMAP_TTL`) |
-| `doc_<path>.txt` | Cached doc as plain text (TTL: `DOC_TTL`) |
-| `doc_<path>.html` | Raw HTML cache — required for `--toc` and `--section` |
-| `index.txt` | Full-text search index (pipe-delimited: `path\|line`) |
-| `index_meta.json` | Pre-computed BM25 statistics (doc lengths, term frequencies) |
-| `snapshots/` | Timestamped doc-list snapshots for change tracking |
+| `<version>/docs.json` | Doc list fetched from repo (replaces sitemap.xml) |
+| `<version>/doc_<path>.md` | Cached raw Markdown source |
+| `<version>/doc_<path>.txt` | Cached doc as plain text (derived from .md) |
+| `<version>/index.txt` | Full-text search index |
+| `<version>/index_meta.json` | Pre-computed BM25 statistics |
+| `<version>/snapshots/` | Timestamped doc-list snapshots |
+| `github_tags.json` | Cached GitHub release tag list (from cache.sh tags) |
 
 The `.cache/` directory is gitignored.
 

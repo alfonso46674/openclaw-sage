@@ -1,6 +1,6 @@
 # Release Plan
 
-Last updated: 2026-03-11
+Last updated: 2026-04-23
 
 ---
 
@@ -61,10 +61,35 @@ Minor bump — introduces new env vars and changes fetch behavior.
 
 | Item | Summary | Type |
 |------|---------|------|
-| BUG-10 | Clean fetched HTML of CSS/JS/chrome noise before caching | Bug fix |
-| ENH-20 | Parallel doc fetching with `xargs -P` (`OPENCLAW_SAGE_FETCH_JOBS`) | Enhancement |
+| BUG-10 | Clean fetched HTML of CSS/JS/chrome noise before caching | Bug fix — superseded by ENH-26 in v0.3.1 |
+| ENH-20 | Parallel doc fetching with `xargs -P` (`OPENCLAW_SAGE_FETCH_JOBS`) | Enhancement — preserved in v0.3.1 |
 | ENH-09 | `search.sh --max-results N` | Enhancement |
 | ENH-15 | Incremental index builds (only reprocess changed docs) | Enhancement |
+
+---
+
+### v0.3.1 — Markdown source & doc versioning
+
+Minor bump — replaces the HTML fetch pipeline with Markdown-source fetching from GitHub or a local repo clone. Introduces per-tag doc versioning via `--version` flag.
+
+| Item | Summary | Type |
+|------|---------|------|
+| ENH-26 | GitHub/local Markdown source, replaces HTML fetch pipeline | Enhancement |
+| ENH-26 | `--version <tag>` flag on all scripts | Enhancement |
+| ENH-26 | `cache.sh tags` — list available OpenClaw release tags | Enhancement |
+| BUG-10 | HTML cleaning pipeline — superseded, removed | Superseded |
+
+**Breaking changes:**
+- Old flat cache (`$CACHE_DIR/doc_*.txt`, `sitemap.xml`) is abandoned. Users must re-run `build-index.sh fetch`.
+- `lynx` and `w3m` are no longer used or needed.
+- `recent.sh` "updated at source" section removed (no `lastmod` in `docs.json`). See ENH-27 for future restoration.
+- `SITEMAP_TTL` / `OPENCLAW_SAGE_SITEMAP_TTL` env var removed.
+
+**Affected future releases:**
+- v0.5.0 ENH-19 (checksums): unaffected — checksum `.txt` files as before.
+- v0.5.0 ENH-25 (archive snapshots): improved — stores `.md` files; `reuse fetch_markdown`.
+- v0.5.0 ENH-23 (doc version awareness): largely superseded by `--version` flag; reassess at v0.5.0.
+- v0.5.0 ENH-22 (auto-refresh): compatible — `build-index.sh fetch` semantics unchanged.
 
 ---
 
