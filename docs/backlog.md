@@ -106,6 +106,12 @@ Bugs are ordered by severity. Fix critical issues before any new feature work.
 - **Description:** The "Tip: For comprehensive ranked results..." lines are always printed to stdout even when results were found. Agents parsing stdout receive unexpected non-result text. Violates the "stdout is data, stderr is diagnostics" convention.
 - **Fix:** Redirect the "Tip:" block to `>&2`, or omit it entirely when results were found (only print as guidance when `found=0`).
 
+#### BUG-22 — `track-changes.sh diff` and `since` pass unsorted files to `comm`
+- **File:** `scripts/track-changes.sh:132-133,172,175`
+- **Status:** done — see fix below
+- **Description:** `comm` requires both inputs to be sorted. New snapshots are always sorted (Python `sorted()` in `get_current_pages`), but snapshots created before ENH-26 or copied from external sources may not be. `comm` emits "file is not in sorted order" warnings to stderr and produces incorrect output on non-GNU systems that enforce the sort precondition strictly. Both `diff` and `since` are affected.
+- **Fix:** Wrap both `comm` inputs in `<(sort ...)` process substitutions. No change to output format.
+
 #### BUG-21 — `track-changes.sh diff/list/since` cannot cross version boundaries
 - **File:** `scripts/track-changes.sh:162-163`
 - **Status:** done — see fix below

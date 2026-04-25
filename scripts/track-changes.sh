@@ -129,8 +129,8 @@ case "$1" in
       before_label="snapshot from $(basename "$BEFORE_SNAP" .txt | sed 's/\([0-9]\{4\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)_\([0-9]\{2\}\)\([0-9]\{2\}\)\([0-9]\{2\}\)/\1-\2-\3/')"
     fi
 
-    added=$(comm -13 "$BEFORE_SNAP" "$AFTER_TMP")
-    removed=$(comm -23 "$BEFORE_SNAP" "$AFTER_TMP")
+    added=$(comm -13 <(sort "$BEFORE_SNAP") <(sort "$AFTER_TMP"))
+    removed=$(comm -23 <(sort "$BEFORE_SNAP") <(sort "$AFTER_TMP"))
 
     echo "Changes since $2  (comparing $before_label → now):"
     echo ""
@@ -169,10 +169,10 @@ case "$1" in
     echo "Diff: $2 → $3"
     echo ""
     echo "=== Added ==="
-    comm -13 "$F1" "$F2" | sed 's/^/  + /'
+    comm -13 <(sort "$F1") <(sort "$F2") | sed 's/^/  + /'
     echo ""
     echo "=== Removed ==="
-    comm -23 "$F1" "$F2" | sed 's/^/  - /'
+    comm -23 <(sort "$F1") <(sort "$F2") | sed 's/^/  - /'
     ;;
 
   *)
